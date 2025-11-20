@@ -28,6 +28,24 @@ Imagemage lets you generate and edit images using Google's Gemini models without
 
 ## Installation
 
+### Homebrew (Recommended)
+
+```bash
+brew tap quinnypig/imagemage
+brew install imagemage
+```
+
+That's it. One tap, one install. Like installing software should be.
+
+### From Binary Releases
+
+Download pre-built binaries for your platform from the [releases page](https://github.com/quinnypig/imagemage/releases).
+
+Available for:
+- macOS (Intel & Apple Silicon)
+- Linux (amd64 & arm64)
+- Windows (amd64)
+
 ### From Source
 
 ```bash
@@ -42,7 +60,7 @@ go build -o imagemage
 go install
 ```
 
-That's it. No `npm install`, no virtual environments, no "did you activate your venv?" Just a binary.
+No `npm install`, no virtual environments, no "did you activate your venv?" Just a binary.
 
 ### Configuration
 
