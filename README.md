@@ -46,6 +46,12 @@ Available for:
 - Linux (amd64 & arm64)
 - Windows (amd64)
 
+For Linux/macOS:
+```
+VER=$(curl -s https://api.github.com/repos/quinnypig/imagemage/releases/latest | jq -r '.tag_name')
+curl -sL https://github.com/quinnypig/imagemage/releases/download/${VER}/imagemage_${VER#v}_$(uname)_$(uname -m).tar.gz| tar -C /usr/local/bin -xzv imagemage
+```
+
 ### From Source
 
 ```bash
