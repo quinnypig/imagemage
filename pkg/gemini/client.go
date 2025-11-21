@@ -209,27 +209,34 @@ func (c *Client) GenerateContentWithFullOptions(prompt string, imagesBase64 []st
 		},
 	}
 
-	// Always add generation config with model-appropriate default resolution
-	imageSize := resolution
-	if imageSize == "" {
-		// Frugal model (2.5 Flash) only supports 1K, Pro model supports up to 4K
-		if c.model == ModelNameFrugal {
-			imageSize = "1K"
-		} else {
-			imageSize = "4K"
-		}
+	// Configure image generation based on model capabilities
+	imageConfig := &ImageConfig{
+		AspectRatio: aspectRatio,
 	}
 
+	// Frugal model (2.5 Flash) has fixed 1024px output and doesn't accept imageSize parameter
+	// Pro model supports 1K, 2K, 4K via imageSize parameter
+	if c.model != ModelNameFrugal {
+		imageSize := resolution
+		if imageSize == "" {
+			imageSize = "4K" // Pro model default
+		}
+		imageConfig.ImageSize = imageSize
+	}
+	// For frugal model, omit ImageSize entirely (fixed 1024px output)
+
 	reqBody.GenerationConfig = &GenerationConfig{
-		ImageConfig: &ImageConfig{
-			AspectRatio: aspectRatio,
-			ImageSize:   imageSize,
-		},
+		ImageConfig: imageConfig,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Debug: Print request body if DEBUG env var is set
+	if os.Getenv("DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "DEBUG: Request body:\n%s\n", string(jsonData))
 	}
 
 	// Use client's model and baseURL, falling back to defaults if not set
@@ -243,6 +250,12 @@ func (c *Client) GenerateContentWithFullOptions(prompt string, imagesBase64 []st
 	}
 
 	url := fmt.Sprintf("%s/%s:generateContent?key=%s", baseURL, model, c.apiKey)
+
+	// Debug: Print URL (without API key) if DEBUG env var is set
+	if os.Getenv("DEBUG") != "" {
+		debugURL := fmt.Sprintf("%s/%s:generateContent?key=REDACTED", baseURL, model)
+		fmt.Fprintf(os.Stderr, "DEBUG: Request URL: %s\n", debugURL)
+	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
@@ -259,6 +272,12 @@ func (c *Client) GenerateContentWithFullOptions(prompt string, imagesBase64 []st
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Debug: Print response if DEBUG env var is set
+	if os.Getenv("DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "DEBUG: Response status: %d\n", resp.StatusCode)
+		fmt.Fprintf(os.Stderr, "DEBUG: Response body:\n%s\n", string(body))
 	}
 
 	if resp.StatusCode != http.StatusOK {

@@ -104,10 +104,10 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Validate frugal mode limitations (Gemini 2.5 Flash only supports 1K resolution)
+	// Validate frugal mode limitations (Gemini 2.5 Flash has fixed 1024px output)
 	if editFrugal {
-		if editResolution != "" && editResolution != "1K" {
-			return fmt.Errorf("--frugal mode only supports 1K resolution, but %s was requested. Gemini 2.5 Flash only supports 1K (1024px) resolution. Remove --frugal to use higher resolutions", editResolution)
+		if editResolution != "" {
+			return fmt.Errorf("--frugal mode has fixed 1024px output and does not accept --resolution parameter. Gemini 2.5 Flash always outputs at 1024px. Remove --resolution or --frugal flag")
 		}
 		if totalImages > 1 {
 			fmt.Printf("⚠️  Warning: Multi-image composition with --frugal mode may have limitations. Gemini 2.5 Flash multi-image capabilities are not well documented. For best results with %d images, consider using Gemini 3 Pro (remove --frugal flag).\n\n", totalImages)
@@ -155,16 +155,16 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	if editAspectRatio != "" {
 		fmt.Printf("Aspect Ratio: %s\n", editAspectRatio)
 	}
-	resolution := editResolution
-	if resolution == "" {
-		// Show the actual default that will be used based on the model
-		if editFrugal {
-			resolution = "1K"
-		} else {
+	// Display resolution info
+	if editFrugal {
+		fmt.Printf("Resolution: 1024px (fixed)\n")
+	} else {
+		resolution := editResolution
+		if resolution == "" {
 			resolution = "4K"
 		}
+		fmt.Printf("Resolution: %s\n", resolution)
 	}
-	fmt.Printf("Resolution: %s\n", resolution)
 	if editFrugal {
 		fmt.Printf("Model: %s (frugal)\n", gemini.ModelNameFrugal)
 	} else {

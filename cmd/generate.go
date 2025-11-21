@@ -99,13 +99,13 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Validate frugal mode limitations (Gemini 2.5 Flash only supports 1K resolution)
+	// Validate frugal mode limitations (Gemini 2.5 Flash has fixed 1024px output)
 	if generateFrugal {
 		if generateSlide {
-			return fmt.Errorf("--frugal mode is incompatible with --slide (which requires 4K resolution). Gemini 2.5 Flash only supports 1K (1024px) resolution")
+			return fmt.Errorf("--frugal mode is incompatible with --slide (which requires 4K resolution). Gemini 2.5 Flash has fixed 1024px output")
 		}
-		if generateResolution != "" && generateResolution != "1K" {
-			return fmt.Errorf("--frugal mode only supports 1K resolution, but %s was requested. Gemini 2.5 Flash only supports 1K (1024px) resolution. Remove --frugal to use higher resolutions", generateResolution)
+		if generateResolution != "" {
+			return fmt.Errorf("--frugal mode has fixed 1024px output and does not accept --resolution parameter. Gemini 2.5 Flash always outputs at 1024px. Remove --resolution or --frugal flag")
 		}
 	}
 
@@ -145,16 +145,16 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	if generateAspectRatio != "" {
 		fmt.Printf("Aspect Ratio: %s\n", generateAspectRatio)
 	}
-	resolution := generateResolution
-	if resolution == "" {
-		// Show the actual default that will be used based on the model
-		if generateFrugal {
-			resolution = "1K"
-		} else {
+	// Display resolution info
+	if generateFrugal {
+		fmt.Printf("Resolution: 1024px (fixed)\n")
+	} else {
+		resolution := generateResolution
+		if resolution == "" {
 			resolution = "4K"
 		}
+		fmt.Printf("Resolution: %s\n", resolution)
 	}
-	fmt.Printf("Resolution: %s\n", resolution)
 	if generateFrugal {
 		fmt.Printf("Model: %s (frugal)\n", gemini.ModelNameFrugal)
 	} else {

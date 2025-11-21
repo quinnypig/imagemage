@@ -154,35 +154,40 @@ func TestClient_UsesImageResolution(t *testing.T) {
 	}
 }
 
-func TestFrugalClient_DefaultsTo1K(t *testing.T) {
+func TestFrugalClient_OmitsImageSize(t *testing.T) {
 	tests := []struct {
 		name               string
 		model              string
 		resolution         string
+		expectImageSize    bool
 		expectedResolution string
 	}{
 		{
-			name:               "frugal model defaults to 1K when no resolution specified",
-			model:              ModelNameFrugal,
-			resolution:         "",
-			expectedResolution: "1K",
+			name:            "frugal model omits imageSize (fixed 1024px output)",
+			model:           ModelNameFrugal,
+			resolution:      "",
+			expectImageSize: false,
+			expectedResolution: "",
 		},
 		{
 			name:               "pro model defaults to 4K when no resolution specified",
 			model:              ModelName,
 			resolution:         "",
+			expectImageSize:    true,
 			expectedResolution: "4K",
 		},
 		{
-			name:               "frugal model respects explicit 1K",
-			model:              ModelNameFrugal,
-			resolution:         "1K",
-			expectedResolution: "1K",
+			name:               "pro model respects explicit 2K",
+			model:              ModelName,
+			resolution:         "2K",
+			expectImageSize:    true,
+			expectedResolution: "2K",
 		},
 		{
 			name:               "pro model respects explicit 4K",
 			model:              ModelName,
 			resolution:         "4K",
+			expectImageSize:    true,
 			expectedResolution: "4K",
 		},
 	}
@@ -230,12 +235,20 @@ func TestFrugalClient_DefaultsTo1K(t *testing.T) {
 				t.Fatalf("failed to unmarshal request body: %v", err)
 			}
 
-			// Verify resolution in the request
+			// Verify imageSize handling in the request
 			if req.GenerationConfig == nil || req.GenerationConfig.ImageConfig == nil {
 				t.Fatal("expected ImageConfig to be set")
 			}
-			if req.GenerationConfig.ImageConfig.ImageSize != tt.expectedResolution {
-				t.Errorf("expected resolution %q, got %q", tt.expectedResolution, req.GenerationConfig.ImageConfig.ImageSize)
+
+			if tt.expectImageSize {
+				if req.GenerationConfig.ImageConfig.ImageSize != tt.expectedResolution {
+					t.Errorf("expected resolution %q, got %q", tt.expectedResolution, req.GenerationConfig.ImageConfig.ImageSize)
+				}
+			} else {
+				// Frugal model should not have ImageSize set (fixed 1024px output)
+				if req.GenerationConfig.ImageConfig.ImageSize != "" {
+					t.Errorf("frugal model should not send imageSize parameter, but got %q", req.GenerationConfig.ImageConfig.ImageSize)
+				}
 			}
 		})
 	}
