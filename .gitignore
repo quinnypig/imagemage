@@ -33,3 +33,6 @@ Thumbs.db
 !examples/*.png
 !examples/*.jpg
 .claude/*
+
+dist/
+./imagemage
