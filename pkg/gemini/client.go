@@ -340,47 +340,55 @@ func (c *Client) GenerateContentWithFullOptions(prompt string, imagesBase64 []st
 		}
 		fmt.Fprintf(os.Stderr, "DEBUG: Request URL: %s\n", debugURL)
 	}
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return GenerateResult{}, fmt.Errorf("failed to create request: %w", err)
-	}
 
-	req.Header.Set("Content-Type", "application/json")
+	const maxRetries = 3
+	var lastErr error
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return GenerateResult{}, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			return GenerateResult{}, fmt.Errorf("failed to create request: %w", err)
+		}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return GenerateResult{}, fmt.Errorf("failed to read response: %w", err)
-	}
+		req.Header.Set("Content-Type", "application/json")
 
-	// Debug: Print response if DEBUG env var is set
-	if os.Getenv("DEBUG") != "" {
-		fmt.Fprintf(os.Stderr, "DEBUG: Response status: %d\n", resp.StatusCode)
-		fmt.Fprintf(os.Stderr, "DEBUG: Response body:\n%s\n", string(body))
-	}
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return GenerateResult{}, fmt.Errorf("failed to send request: %w", err)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return GenerateResult{}, c.handleError(resp.StatusCode, body)
-	}
+		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return GenerateResult{}, fmt.Errorf("failed to read response: %w", err)
+		}
 
-	var result GenerateResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return GenerateResult{}, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
+		// Debug: Print response if DEBUG env var is set
+		if os.Getenv("DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "DEBUG: Response status: %d\n", resp.StatusCode)
+			fmt.Fprintf(os.Stderr, "DEBUG: Response body:\n%s\n", string(body))
+		}
 
-	if result.Error != nil {
-		return GenerateResult{}, fmt.Errorf("API error (%d): %s", result.Error.Code, result.Error.Message)
-	}
+		if resp.StatusCode != http.StatusOK {
+			return GenerateResult{}, c.handleError(resp.StatusCode, body)
+		}
 
-	// Extract image data and suggested filename from response
-	res := c.extractResult(&result)
-	if res.ImageData == "" {
-		// Collect all text parts so we can surface why Gemini refused
+		var result GenerateResponse
+		if err := json.Unmarshal(body, &result); err != nil {
+			return GenerateResult{}, fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+
+		if result.Error != nil {
+			return GenerateResult{}, fmt.Errorf("API error (%d): %s", result.Error.Code, result.Error.Message)
+		}
+
+		// Extract image data and suggested filename from response
+		res := c.extractResult(&result)
+		if res.ImageData != "" {
+			return res, nil
+		}
+
+		// No image in response — collect text for diagnostics
 		var textParts []string
 		if len(result.Candidates) > 0 {
 			for _, part := range result.Candidates[0].Content.Parts {
@@ -390,12 +398,18 @@ func (c *Client) GenerateContentWithFullOptions(prompt string, imagesBase64 []st
 			}
 		}
 		if len(textParts) > 0 {
+			// Model explicitly refused — don't retry
 			return GenerateResult{}, fmt.Errorf("no image data found in response (model said: %s)", strings.Join(textParts, " | "))
 		}
-		return GenerateResult{}, fmt.Errorf("no image data found in response (empty candidates)")
+
+		// Empty candidates with no explanation — transient, retry
+		lastErr = fmt.Errorf("no image data found in response (empty candidates, attempt %d/%d)", attempt, maxRetries)
+		if os.Getenv("DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "DEBUG: %v, retrying...\n", lastErr)
+		}
 	}
 
-	return res, nil
+	return GenerateResult{}, lastErr
 }
 
 // extractResult extracts base64 image data and suggested filename from the response

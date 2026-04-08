@@ -6,7 +6,11 @@ repos:
       - id: go-vet
       - id: go-imports
 
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.63.4
+  - repo: local
     hooks:
       - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run --new-from-rev=HEAD
+        types: [go]
+        language: system
+        pass_filenames: false
