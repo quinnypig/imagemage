@@ -5,7 +5,10 @@ import (
 	"imagemage/pkg/filehandler"
 	"imagemage/pkg/gemini"
 	"imagemage/pkg/metadata"
+	"io"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -22,6 +25,7 @@ var (
 	generateConfig      string
 	generateForce       bool
 	generateStorePrompt bool
+	generatePromptFile  string
 )
 
 var generateCmd = &cobra.Command{
@@ -38,8 +42,9 @@ Examples:
   imagemage generate "cyberpunk city" --style="neon, futuristic"
   imagemage generate "wide cinematic shot" --aspect-ratio="21:9"
   imagemage generate "phone wallpaper" --aspect-ratio="9:16"
-  imagemage generate "concept art" --frugal`,
-	Args: cobra.MinimumNArgs(1),
+  imagemage generate "concept art" --frugal
+  imagemage generate --prompt-file ./prompt.txt`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runGenerate,
 }
 
@@ -57,14 +62,17 @@ func init() {
 	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to config file (JSON) with style, colorScheme, additionalContext")
 	generateCmd.Flags().BoolVar(&generateForce, "force", false, "Overwrite existing files without confirmation")
 	generateCmd.Flags().BoolVar(&generateStorePrompt, "store-prompt", false, "Store prompt in PNG metadata for reproducibility")
+	generateCmd.Flags().StringVar(&generatePromptFile, "prompt-file", "", "Read prompt from a file (use '-' for stdin)")
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
-	prompt := args[0]
+	prompt, err := resolvePrompt(args)
+	if err != nil {
+		return err
+	}
 
 	// Load config if --slide or --config is specified
 	var config *gemini.ImageGenConfig
-	var err error
 	if generateSlide || generateConfig != "" {
 		config, err = gemini.FindConfig(generateConfig)
 		if err != nil {
@@ -199,4 +207,41 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nSuccessfully generated %d/%d images\n", successCount, generateCount)
 
 	return nil
+}
+
+func resolvePrompt(args []string) (string, error) {
+	hasArg := len(args) > 0
+	hasFile := generatePromptFile != ""
+
+	if hasArg && hasFile {
+		return "", fmt.Errorf("provide the prompt either as a positional argument or via --prompt-file, not both")
+	}
+	if hasArg {
+		return args[0], nil
+	}
+	if !hasFile {
+		return "", fmt.Errorf("a prompt is required: pass it as an argument or via --prompt-file")
+	}
+
+	var (
+		data []byte
+		err  error
+	)
+	if generatePromptFile == "-" {
+		data, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt from stdin: %w", err)
+		}
+	} else {
+		data, err = os.ReadFile(generatePromptFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt file: %w", err)
+		}
+	}
+
+	prompt := strings.TrimSpace(string(data))
+	if prompt == "" {
+		return "", fmt.Errorf("prompt is empty")
+	}
+	return prompt, nil
 }
