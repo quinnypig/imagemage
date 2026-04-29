@@ -24,7 +24,8 @@ var patternCmd = &cobra.Command{
 Examples:
   imagemage pattern "geometric triangles"
   imagemage pattern "floral" --type="seamless" --style="watercolor"
-  imagemage pattern "hexagons" --style="minimal, modern"`,
+  imagemage pattern "hexagons" --style="minimal, modern"
+  imagemage pattern --prompt-file ./pattern.txt`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runPattern,
 }

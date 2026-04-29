@@ -23,7 +23,8 @@ var diagramCmd = &cobra.Command{
 Examples:
   imagemage diagram "CI/CD pipeline with testing stages"
   imagemage diagram "microservices architecture" --type="architecture"
-  imagemage diagram "user authentication flow" --type="flowchart"`,
+  imagemage diagram "user authentication flow" --type="flowchart"
+  imagemage diagram --prompt-file ./diagram.txt`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDiagram,
 }

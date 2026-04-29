@@ -31,7 +31,8 @@ Examples:
   imagemage icon "rocket ship" --sizes="64,128,256" --type="app-icon"
   imagemage icon "hamburger menu" --type="ui-element"
   imagemage icon "make this into a flat icon" -i logo.png
-  imagemage icon "simplify for app icon" -i photo.png --type="app-icon"`,
+  imagemage icon "simplify for app icon" -i photo.png --type="app-icon"
+  imagemage icon --prompt-file ./icon.txt`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runIcon,
 }

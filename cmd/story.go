@@ -24,7 +24,8 @@ var storyCmd = &cobra.Command{
 Examples:
   imagemage story "a seed growing into a tree" --frames=4
   imagemage story "day to night transition in a city" --frames=6 --style="cinematic"
-  imagemage story "character transformation" --frames=3`,
+  imagemage story "character transformation" --frames=3
+  imagemage story --prompt-file ./narrative.txt`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runStory,
 }

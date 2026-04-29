@@ -41,7 +41,10 @@ Examples:
   imagemage edit scene.png "put these people here" -i person1.png -i person2.png
 
   # Complex composition
-  imagemage edit office.png "add this person and this laptop" -i person.png -i laptop.png`,
+  imagemage edit office.png "add this person and this laptop" -i person.png -i laptop.png
+
+  # Read instruction from a file
+  imagemage edit photo.png --prompt-file ./instruction.txt`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runEdit,
 }
