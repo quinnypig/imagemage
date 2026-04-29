@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	diagramType   string
-	diagramOutput string
+	diagramType       string
+	diagramOutput     string
+	diagramPromptFile string
 )
 
 var diagramCmd = &cobra.Command{
@@ -23,7 +24,7 @@ Examples:
   imagemage diagram "CI/CD pipeline with testing stages"
   imagemage diagram "microservices architecture" --type="architecture"
   imagemage diagram "user authentication flow" --type="flowchart"`,
-	Args: cobra.MinimumNArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runDiagram,
 }
 
@@ -32,10 +33,14 @@ func init() {
 
 	diagramCmd.Flags().StringVar(&diagramType, "type", "diagram", "Diagram type: flowchart, architecture, sequence, entity-relationship")
 	diagramCmd.Flags().StringVarP(&diagramOutput, "output", "o", ".", "Output directory")
+	addPromptFileFlag(diagramCmd, &diagramPromptFile)
 }
 
 func runDiagram(cmd *cobra.Command, args []string) error {
-	description := args[0]
+	description, err := resolvePrompt(optionalArg(args, 0), diagramPromptFile)
+	if err != nil {
+		return err
+	}
 
 	// Build prompt
 	prompt := fmt.Sprintf("Create a clear, professional %s diagram: %s. ", diagramType, description)

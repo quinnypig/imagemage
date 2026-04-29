@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	iconSizes  string
-	iconType   string
-	iconOutput string
-	iconInput  string
+	iconSizes      string
+	iconType       string
+	iconOutput     string
+	iconInput      string
+	iconPromptFile string
 )
 
 var iconCmd = &cobra.Command{
@@ -31,7 +32,7 @@ Examples:
   imagemage icon "hamburger menu" --type="ui-element"
   imagemage icon "make this into a flat icon" -i logo.png
   imagemage icon "simplify for app icon" -i photo.png --type="app-icon"`,
-	Args: cobra.MinimumNArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runIcon,
 }
 
@@ -42,10 +43,14 @@ func init() {
 	iconCmd.Flags().StringVar(&iconType, "type", "app-icon", "Icon type: app-icon, favicon, ui-element")
 	iconCmd.Flags().StringVarP(&iconOutput, "output", "o", ".", "Output directory for icons")
 	iconCmd.Flags().StringVarP(&iconInput, "input", "i", "", "Input image to convert to icon")
+	addPromptFileFlag(iconCmd, &iconPromptFile)
 }
 
 func runIcon(cmd *cobra.Command, args []string) error {
-	description := args[0]
+	description, err := resolvePrompt(optionalArg(args, 0), iconPromptFile)
+	if err != nil {
+		return err
+	}
 
 	// Parse sizes
 	sizeStrs := strings.Split(iconSizes, ",")

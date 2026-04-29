@@ -5,10 +5,7 @@ import (
 	"imagemage/pkg/filehandler"
 	"imagemage/pkg/gemini"
 	"imagemage/pkg/metadata"
-	"io"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -62,11 +59,11 @@ func init() {
 	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to config file (JSON) with style, colorScheme, additionalContext")
 	generateCmd.Flags().BoolVar(&generateForce, "force", false, "Overwrite existing files without confirmation")
 	generateCmd.Flags().BoolVar(&generateStorePrompt, "store-prompt", false, "Store prompt in PNG metadata for reproducibility")
-	generateCmd.Flags().StringVar(&generatePromptFile, "prompt-file", "", "Read prompt from a file (use '-' for stdin)")
+	addPromptFileFlag(generateCmd, &generatePromptFile)
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
-	prompt, err := resolvePrompt(args)
+	prompt, err := resolvePrompt(optionalArg(args, 0), generatePromptFile)
 	if err != nil {
 		return err
 	}
@@ -207,41 +204,4 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nSuccessfully generated %d/%d images\n", successCount, generateCount)
 
 	return nil
-}
-
-func resolvePrompt(args []string) (string, error) {
-	hasArg := len(args) > 0
-	hasFile := generatePromptFile != ""
-
-	if hasArg && hasFile {
-		return "", fmt.Errorf("provide the prompt either as a positional argument or via --prompt-file, not both")
-	}
-	if hasArg {
-		return args[0], nil
-	}
-	if !hasFile {
-		return "", fmt.Errorf("a prompt is required: pass it as an argument or via --prompt-file")
-	}
-
-	var (
-		data []byte
-		err  error
-	)
-	if generatePromptFile == "-" {
-		data, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", fmt.Errorf("failed to read prompt from stdin: %w", err)
-		}
-	} else {
-		data, err = os.ReadFile(generatePromptFile)
-		if err != nil {
-			return "", fmt.Errorf("failed to read prompt file: %w", err)
-		}
-	}
-
-	prompt := strings.TrimSpace(string(data))
-	if prompt == "" {
-		return "", fmt.Errorf("prompt is empty")
-	}
-	return prompt, nil
 }
