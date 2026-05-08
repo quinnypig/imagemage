@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
-	"imagemage/pkg/gemini"
+	"imagemage/pkg/imagegen"
 	"imagemage/pkg/metadata"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ func init() {
 	editCmd.Flags().StringArrayVarP(&editInputs, "input", "i", []string{}, "Additional input images for composition (can be used multiple times)")
 	editCmd.Flags().StringVarP(&editAspectRatio, "aspect-ratio", "a", "", "Aspect ratio for output (auto-detected from input if not specified)")
 	editCmd.Flags().StringVarP(&editResolution, "resolution", "r", "", "Image resolution (512px, 1K, 2K, 4K). Defaults to 4K")
-	editCmd.Flags().BoolVarP(&editFrugal, "frugal", "f", false, "Use Nano Banana 2 (faster, cheaper, still supports 4K)")
+	editCmd.Flags().BoolVarP(&editFrugal, "frugal", "f", false, "Deprecated alias for low-cost generation; with Gemini selects Nano Banana 2")
 	editCmd.Flags().BoolVar(&editForce, "force", false, "Overwrite output file if it exists")
 	editCmd.Flags().BoolVar(&editStorePrompt, "store-prompt", false, "Store instruction in PNG metadata")
 }
@@ -87,7 +88,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	if outputPath == "" {
 		ext := filepath.Ext(baseImagePath)
 		baseName := strings.TrimSuffix(filepath.Base(baseImagePath), ext)
-		outputPath = filepath.Join(filepath.Dir(baseImagePath), baseName+"-edited"+ext)
+		outputPath = filepath.Join(filepath.Dir(baseImagePath), baseName+"-edited"+imageFileExtension())
 	}
 
 	// Check if output exists
@@ -104,14 +105,14 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			fmt.Printf("⚠️  Could not detect image dimensions: %v\n", err)
 		} else {
-			detectedAspectRatio = gemini.FindClosestAspectRatio(width, height)
+			detectedAspectRatio = imagegen.FindClosestAspectRatio(width, height)
 			editAspectRatio = detectedAspectRatio
 		}
 	}
 
 	// Validate aspect ratio if provided
 	if editAspectRatio != "" {
-		if err := gemini.ValidateAspectRatio(editAspectRatio); err != nil {
+		if err := imagegen.ValidateAspectRatio(editAspectRatio); err != nil {
 			return err
 		}
 	}
@@ -119,36 +120,26 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Loading base image: %s\n", filepath.Base(baseImagePath))
 
 	// Load and encode base image
-	baseImageBase64, err := filehandler.LoadImageAsBase64(baseImagePath)
+	baseImage, err := loadImageInput(baseImagePath)
 	if err != nil {
 		return fmt.Errorf("failed to load base image: %w", err)
 	}
 
 	// Load and encode additional images
-	var allImagesBase64 []string
-	allImagesBase64 = append(allImagesBase64, baseImageBase64)
+	allImages := []imagegen.ImageInput{baseImage}
 
 	for i, inputPath := range editInputs {
 		fmt.Printf("Loading input %d: %s\n", i+1, filepath.Base(inputPath))
-		inputBase64, err := filehandler.LoadImageAsBase64(inputPath)
+		inputImage, err := loadImageInput(inputPath)
 		if err != nil {
 			return fmt.Errorf("failed to load input image %s: %w", inputPath, err)
 		}
-		allImagesBase64 = append(allImagesBase64, inputBase64)
+		allImages = append(allImages, inputImage)
 	}
 
-	// Create Gemini client
-	var client *gemini.Client
-	if editFrugal {
-		client, err = gemini.NewFrugalClient()
-		if err != nil {
-			return fmt.Errorf("failed to create Gemini client: %w", err)
-		}
-	} else {
-		client, err = gemini.NewClient()
-		if err != nil {
-			return fmt.Errorf("failed to create Gemini client: %w", err)
-		}
+	client, provider, model, err := newImageClient(editFrugal)
+	if err != nil {
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	// Display edit info
@@ -167,20 +158,14 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		resolution = "4K"
 	}
 	fmt.Printf("Resolution: %s\n", resolution)
-	if editFrugal {
-		fmt.Printf("Model: %s (Nano Banana 2)\n", gemini.ModelNameFrugal)
-	} else {
-		fmt.Printf("Model: %s\n", gemini.ModelName)
-	}
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s\n", model)
+	fmt.Printf("Quality: %s\n", generationRequest("", "", "", nil, editFrugal).Quality)
 	fmt.Println("\nGenerating edited image...")
 
 	// Generate with all images
-	var result gemini.GenerateResult
-	if editResolution != "" || editAspectRatio != "" {
-		result, err = client.GenerateContentWithFullOptions(instruction, allImagesBase64, editResolution, editAspectRatio)
-	} else {
-		result, err = client.GenerateContentWithImages(instruction, allImagesBase64, "")
-	}
+	req := generationRequest(instruction, editResolution, editAspectRatio, allImages, editFrugal)
+	result, err := client.Edit(context.Background(), req)
 
 	if err != nil {
 		return fmt.Errorf("failed to edit image: %w", err)
@@ -193,7 +178,9 @@ func runEdit(cmd *cobra.Command, args []string) error {
 
 	// Store instruction in metadata if requested
 	if editStorePrompt {
-		if err := metadata.AddPromptToPNG(outputPath, instruction); err != nil {
+		if !canStorePNGMetadata() {
+			fmt.Printf("⚠️  Warning: prompt metadata is only supported for PNG output\n")
+		} else if err := metadata.AddPromptToPNG(outputPath, instruction); err != nil {
 			fmt.Printf("⚠️  Warning: failed to store prompt in metadata: %v\n", err)
 		}
 	}

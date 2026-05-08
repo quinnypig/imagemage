@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
-	"imagemage/pkg/gemini"
+	"imagemage/pkg/imagegen"
 	"path/filepath"
 	"strings"
 
@@ -38,23 +39,25 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Loading image: %s\n", imagePath)
 
 	// Load image as base64
-	imageBase64, err := filehandler.LoadImageAsBase64(imagePath)
+	imageInput, err := loadImageInput(imagePath)
 	if err != nil {
 		return fmt.Errorf("failed to load image: %w", err)
 	}
 
-	// Create Gemini client
-	client, err := gemini.NewClient()
+	client, provider, model, err := newImageClient(false)
 	if err != nil {
-		return fmt.Errorf("failed to create Gemini client: %w", err)
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	prompt := "Restore and enhance this photo. Remove noise, improve clarity, fix any damage or artifacts, enhance colors naturally, and improve overall quality while preserving the original character of the image."
 
 	fmt.Println("Restoring and enhancing photo...")
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s\n", model)
 
 	// Generate restored image
-	result, err := client.GenerateContentWithImage(prompt, imageBase64)
+	req := generationRequest(prompt, "", "", []imagegen.ImageInput{imageInput}, false)
+	result, err := client.Edit(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("failed to restore image: %w", err)
 	}
@@ -64,7 +67,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	if outputPath == "" {
 		ext := filepath.Ext(imagePath)
 		base := strings.TrimSuffix(imagePath, ext)
-		outputPath = base + "_restored" + ext
+		outputPath = base + "_restored" + imageFileExtension()
 	}
 
 	outputPath = filehandler.EnsureUniqueFilename(outputPath)

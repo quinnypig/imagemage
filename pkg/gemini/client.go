@@ -2,8 +2,10 @@ package gemini
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"imagemage/pkg/imagegen"
 	"io"
 	"net/http"
 	"os"
@@ -161,6 +163,38 @@ func NewClientWithModel(model string) (*Client, error) {
 		model:      model,
 		baseURL:    BaseURL,
 	}, nil
+}
+
+// Generate implements the provider-neutral imagegen.Client interface.
+func (c *Client) Generate(_ context.Context, req imagegen.Request) (imagegen.Result, error) {
+	res, err := c.GenerateContentWithFullOptions(req.Prompt, imageInputsToBase64(req.Images), req.Resolution, req.AspectRatio)
+	if err != nil {
+		return imagegen.Result{}, err
+	}
+	return imagegen.Result{
+		ImageData:     res.ImageData,
+		SuggestedName: res.SuggestedName,
+		Provider:      imagegen.ProviderGemini,
+		Model:         c.model,
+	}, nil
+}
+
+// Edit implements the provider-neutral imagegen.Client interface.
+func (c *Client) Edit(ctx context.Context, req imagegen.Request) (imagegen.Result, error) {
+	return c.Generate(ctx, req)
+}
+
+func imageInputsToBase64(inputs []imagegen.ImageInput) []string {
+	if len(inputs) == 0 {
+		return nil
+	}
+	images := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		if input.Base64 != "" {
+			images = append(images, input.Base64)
+		}
+	}
+	return images
 }
 
 // getAPIKey retrieves the API key from environment variables

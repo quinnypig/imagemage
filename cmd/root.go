@@ -18,12 +18,12 @@ func SetVersionInfo(v, _, _ string) {
 var rootCmd = &cobra.Command{
 	Use:     "imagemage",
 	Version: version,
-	Short:   "A CLI tool for generating and manipulating images using Google's Gemini image models",
-	Long: `Imagemage is a focused CLI tool for image generation using Google's Gemini API.
+	Short:   "A CLI tool for generating and manipulating images using OpenAI or Gemini image models",
+	Long: `Imagemage is a focused CLI tool for image generation using OpenAI or Gemini APIs.
 
-Supports multiple Gemini models:
-  • Gemini 3 Pro Image (default) - High-quality 4K generation
-  • Nano Banana 2 (--frugal) - Pro quality at Flash speed
+Supports multiple providers:
+  • OpenAI Images (default) - GPT Image generation and editing
+  • Gemini image models (--provider=gemini) - Gemini 3 Pro Image and Nano Banana 2
 
 Features include text-to-image creation, image editing, photo restoration, icon generation,
 pattern creation, visual narratives, and technical diagrams.`,

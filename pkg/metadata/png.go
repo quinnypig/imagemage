@@ -9,7 +9,10 @@ import (
 	"image/png"
 	"io"
 	"os"
+	filepathpkg "path/filepath"
 )
+
+const maxTextChunkSize = 1 << 20
 
 // AddPromptToPNG adds a prompt as a tEXt chunk to a PNG file
 // If the file is JPEG, it will be converted to PNG first
@@ -129,20 +132,19 @@ func ReadPromptFromPNG(filepath string) (string, error) {
 			return "", err
 		}
 
-		// Read chunk data
-		chunkData := make([]byte, length)
-		if _, err := io.ReadFull(file, chunkData); err != nil {
-			return "", err
-		}
-
-		// Read CRC (and discard)
-		var crc uint32
-		if err := binary.Read(file, binary.BigEndian, &crc); err != nil {
-			return "", err
-		}
-
 		// Check if this is a tEXt chunk with "Prompt" keyword
 		if string(chunkType) == "tEXt" {
+			if length > maxTextChunkSize {
+				return "", fmt.Errorf("PNG tEXt chunk too large")
+			}
+			chunkData := make([]byte, length)
+			if _, err := io.ReadFull(file, chunkData); err != nil {
+				return "", err
+			}
+			if _, err := file.Seek(4, io.SeekCurrent); err != nil {
+				return "", err
+			}
+
 			// Find null separator
 			nullPos := bytes.IndexByte(chunkData, 0)
 			if nullPos > 0 {
@@ -151,6 +153,10 @@ func ReadPromptFromPNG(filepath string) (string, error) {
 					text := string(chunkData[nullPos+1:])
 					return text, nil
 				}
+			}
+		} else {
+			if _, err := file.Seek(int64(length)+4, io.SeekCurrent); err != nil {
+				return "", err
 			}
 		}
 
@@ -177,16 +183,21 @@ func convertJPEGToPNG(filepath string) error {
 		return fmt.Errorf("failed to decode JPEG: %w", err)
 	}
 
-	// Encode as PNG to the same path
-	outFile, err := os.Create(filepath)
+	dir := filepathpkg.Dir(filepath)
+	tmpFile, err := os.CreateTemp(dir, ".imagemage-*.png")
 	if err != nil {
 		return err
 	}
+	tmpPath := tmpFile.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
 
-	if err := png.Encode(outFile, img); err != nil {
-		_ = outFile.Close()
+	if err := png.Encode(tmpFile, img); err != nil {
+		_ = tmpFile.Close()
 		return fmt.Errorf("failed to encode PNG: %w", err)
 	}
 
-	return outFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, filepath)
 }

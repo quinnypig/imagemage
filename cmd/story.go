@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
-	"imagemage/pkg/gemini"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -46,10 +46,9 @@ func runStory(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("frames cannot exceed 10")
 	}
 
-	// Create Gemini client
-	client, err := gemini.NewClient()
+	client, provider, model, err := newImageClient(false)
 	if err != nil {
-		return fmt.Errorf("failed to create Gemini client: %w", err)
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	fmt.Printf("Generating story: %s\n", narrative)
@@ -57,9 +56,12 @@ func runStory(cmd *cobra.Command, args []string) error {
 	if storyStyle != "" {
 		fmt.Printf("Style: %s\n", storyStyle)
 	}
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s\n", model)
 	fmt.Println()
 
 	successCount := 0
+	ctx := context.Background()
 	for i := 1; i <= storyFrames; i++ {
 		// Create frame-specific prompt
 		prompt := fmt.Sprintf("Frame %d of %d in a visual narrative: %s", i, storyFrames, narrative)
@@ -79,7 +81,8 @@ func runStory(cmd *cobra.Command, args []string) error {
 		fmt.Printf("[%d/%d] Generating frame...\n", i, storyFrames)
 
 		// Generate image
-		result, err := client.GenerateContent(prompt)
+		req := generationRequest(prompt, "", "", nil, false)
+		result, err := client.Generate(ctx, req)
 		if err != nil {
 			fmt.Printf("Error generating frame %d: %v\n", i, err)
 			continue
@@ -87,6 +90,7 @@ func runStory(cmd *cobra.Command, args []string) error {
 
 		// Generate filename (prefer AI-suggested name, with frame prefix)
 		filename := filehandler.GenerateFilename(narrative, result.SuggestedName, fmt.Sprintf("story_frame_%02d", i), 0)
+		filename = applyOutputFormatExtension(filename)
 		outputPath := filepath.Join(storyOutput, filename)
 		outputPath = filehandler.EnsureUniqueFilename(outputPath)
 

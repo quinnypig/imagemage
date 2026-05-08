@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
-	"imagemage/pkg/gemini"
+	"imagemage/pkg/imagegen"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -59,42 +60,38 @@ func runIcon(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check input image if provided
-	var inputImageBase64 string
+	var inputImages []imagegen.ImageInput
 	if iconInput != "" {
 		if _, err := os.Stat(iconInput); os.IsNotExist(err) {
 			return fmt.Errorf("input image not found: %s", iconInput)
 		}
-		var err error
-		inputImageBase64, err = filehandler.LoadImageAsBase64(iconInput)
+		inputImage, err := loadImageInput(iconInput)
 		if err != nil {
 			return fmt.Errorf("failed to load input image: %w", err)
 		}
+		inputImages = append(inputImages, inputImage)
 		fmt.Printf("Input image: %s\n", iconInput)
 	}
 
 	// Create enhanced prompt for icon generation
 	prompt := fmt.Sprintf("Create a clean, professional %s icon: %s. The icon should be simple, recognizable, and work well at small sizes. Use a square 1:1 aspect ratio. Center the icon on a transparent or solid background.", iconType, description)
 
-	// Use Nano Banana 2 - fast and cheap, 1024px base is plenty for icons
-	client, err := gemini.NewFrugalClient()
+	client, provider, model, err := newImageClient(true)
 	if err != nil {
-		return fmt.Errorf("failed to create Gemini client: %w", err)
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	fmt.Printf("Generating icon: %s\n", description)
 	fmt.Printf("Type: %s\n", iconType)
 	fmt.Printf("Sizes: %v\n", sizes)
-	fmt.Printf("Model: %s (Nano Banana 2, then downscaled)\n", gemini.ModelNameFrugal)
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s (then downscaled)\n", model)
 	fmt.Println()
 
 	fmt.Println("Generating base icon...")
 
-	var result gemini.GenerateResult
-	if inputImageBase64 != "" {
-		result, err = client.GenerateContentWithImages(prompt, []string{inputImageBase64}, "1:1")
-	} else {
-		result, err = client.GenerateContentWithImages(prompt, nil, "1:1")
-	}
+	req := generationRequest(prompt, "1K", "1:1", inputImages, true)
+	result, err := providerAction(context.Background(), client, req)
 	if err != nil {
 		return fmt.Errorf("failed to generate icon: %w", err)
 	}

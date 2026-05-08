@@ -1,15 +1,16 @@
 # Imagemage
 
-Because apparently, Google decided that their Gemini image generation API needed its own bloated CLI tool - presumably to hit some product manager's OKR about "CLI adoption" or "developer engagement metrics." Meanwhile, those of us who just want to generate or edit an image without installing half of npm are left wondering why a simple API call requires more dependencies than a JavaScript project.
+Because apparently, every image generation API eventually grows its own bloated CLI tool - presumably to hit some product manager's OKR about "CLI adoption" or "developer engagement metrics." Meanwhile, those of us who just want to generate or edit an image without installing half of npm are left wondering why a simple API call requires more dependencies than a JavaScript project.
 
-So here's Imagemage: a focused CLI tool that does exactly one thing - talks to Google's Gemini image API - without the unnecessary cruft. It's written in Go, which means it's a single binary. No package managers, no dependency hell, no telemetry phoning home about your prompt for "cyberpunk cat wearing sunglasses."
+So here's Imagemage: a focused CLI tool that does exactly one thing - talks to image generation APIs - without the unnecessary cruft. It's written in Go, which means it's a single binary. No package managers, no dependency hell, no telemetry phoning home about your prompt for "cyberpunk cat wearing sunglasses."
 
 ## What This Actually Does
 
-Imagemage lets you generate and edit images using Google's Gemini models without requiring their official CLI or any of its questionable architectural decisions. You get:
+Imagemage lets you generate and edit images using OpenAI Images by default, with Google's Gemini image models still available as a fallback provider. You get:
 
-- **Gemini 3 Pro Image** (default) - The good stuff: high-quality 4K generation
-- **Nano Banana 2** (`--frugal`) - Pro quality at Flash speed, still supports 4K
+- **OpenAI Images** (default) - GPT Image generation and editing via `gpt-image-2`
+- **Gemini 3 Pro Image** (`--provider=gemini`) - High-quality 4K generation
+- **Nano Banana 2** (`--provider=gemini --frugal`) - Pro quality at Flash speed, still supports 4K
 
 ## What You Can Do With This Thing
 
@@ -24,7 +25,7 @@ Imagemage lets you generate and edit images using Google's Gemini models without
 ## Prerequisites
 
 - Go 1.22 or higher (because Go is civilized and doesn't make you manage Python versions)
-- A Google Gemini API key (the actual cost of using this)
+- An OpenAI API key, or a Google Gemini API key if using `--provider=gemini`
 
 ## Installation
 
@@ -70,7 +71,13 @@ No `npm install`, no virtual environments, no "did you activate your venv?" Just
 
 ### Configuration
 
-Set your Gemini API key as an environment variable. Because we're not barbarians who hardcode credentials, Imagemage checks for these in order:
+Set your OpenAI API key as an environment variable:
+
+```bash
+export OPENAI_API_KEY="your-api-key-here"
+```
+
+To keep using Gemini, set `IMAGEMAGE_PROVIDER=gemini` or pass `--provider=gemini`, then provide a Gemini API key. Imagemage checks for these in order:
 
 ```bash
 export NANOBANANA_GEMINI_API_KEY="your-api-key-here"
@@ -84,7 +91,7 @@ export GOOGLE_API_KEY="your-api-key-here"
 
 (Yes, the env vars still say NANOBANANA. They're the standard names used across Gemini image tools. Don't @ me.)
 
-Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey). Yes, you'll need a Google account. No, there's no way around it.
+Get OpenAI API keys from the OpenAI platform dashboard. Gemini keys come from [Google AI Studio](https://makersuite.google.com/app/apikey).
 
 ## Usage
 
@@ -108,7 +115,10 @@ imagemage generate "phone wallpaper" --aspect-ratio="9:16"
 imagemage generate "social media post" --aspect-ratio="1:1"
 
 # Use frugal mode when you're watching your API costs
-imagemage generate "concept art" --frugal --count=5
+imagemage generate "concept art" --quality=low --count=5
+
+# Use Gemini instead of OpenAI
+imagemage generate "concept art" --provider=gemini
 ```
 
 **Useful Flags:**
@@ -116,7 +126,12 @@ imagemage generate "concept art" --frugal --count=5
 - `-o, --output` - Output directory (default: current directory, because obviously)
 - `-s, --style` - Additional style guidance for when your prompt needs more... guidance
 - `-a, --aspect-ratio` - Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9, 5:4, 4:5)
-- `-f, --frugal` - Use the cheaper Flash model instead of Pro (your wallet will thank you)
+- `-r, --resolution` - Resolution hint (512px, 1K, 2K, 4K)
+- `--provider` - Image provider: openai or gemini (default: openai, or `IMAGEMAGE_PROVIDER`)
+- `--model` - Provider model override
+- `--quality` - Quality hint: low, medium, high, auto
+- `--format` - Output format for providers that support it: png, jpeg, webp
+- `-f, --frugal` - Deprecated alias for low-cost generation; with Gemini it selects Nano Banana 2
 - `--slide` - Optimized for presentation slides (4K, 16:9)
 - `--store-prompt` - Save the prompt in the image metadata (for reproducibility)
 
@@ -263,8 +278,9 @@ imagemage/
 │   ├── story.go           # Sequential image generation
 │   └── diagram.go         # Diagram generation
 ├── pkg/
-│   ├── gemini/            # Gemini API client (returns images + AI-suggested filenames)
-│   │   └── client.go
+│   ├── imagegen/          # Provider-neutral image generation types
+│   ├── openai/            # OpenAI Images API client
+│   ├── gemini/            # Gemini API client
 │   ├── filehandler/       # File handling and smart filename generation
 │   │   └── filehandler.go
 │   └── metadata/          # PNG metadata handling
@@ -277,7 +293,7 @@ imagemage/
 
 It's refreshingly simple, actually:
 
-1. **API Client** (`pkg/gemini`): Handles authentication and talks to Google's Gemini API directly
+1. **API Clients** (`pkg/openai`, `pkg/gemini`): Handle authentication and provider-specific image requests
 2. **Request Formation**: Your prompt becomes a JSON request. No middleware, no abstraction layers, no "enterprise service mesh."
 3. **Response Processing**: Images come back as base64-encoded data, get decoded, done.
 4. **File Management** (`pkg/filehandler`): Saves files without overwriting things accidentally
@@ -289,7 +305,7 @@ It's refreshingly simple, actually:
 The tool provides actually useful error messages for common issues:
 
 - **Invalid API Key**: Your API key is wrong, missing, or you forgot to export it. Check your environment variables.
-- **API Quota Exceeded**: You've hit Google's rate limits. Either wait, or upgrade your quota. Or use `--frugal` more often.
+- **API Quota Exceeded**: You've hit provider rate limits. Either wait, upgrade quota, or lower quality.
 - **Safety Concerns**: The content filter rejected your prompt. Try rephrasing it, or don't try to generate that.
 - **Network Errors**: Your internet is down, Google's API is down, or something in between is down. Check accordingly.
 
@@ -321,7 +337,7 @@ go test ./...
 
 Because you're conjuring images like a wizard (mage), and the name isn't trademarked by Google. Simple as that.
 
-(The environment variables still reference NANOBANANA because that's the convention established by the community tools for Gemini's image API. Consistency matters more than ego.)
+(The Gemini environment variables still reference NANOBANANA because that's the convention established by the community tools for Gemini's image API. Consistency matters more than ego.)
 
 ## Contributing
 

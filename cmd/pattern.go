@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
-	"imagemage/pkg/gemini"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -46,25 +46,28 @@ func runPattern(cmd *cobra.Command, args []string) error {
 	}
 	prompt += ". The pattern should tile seamlessly and be suitable for use as a background or texture."
 
-	// Create Gemini client
-	client, err := gemini.NewClient()
+	client, provider, model, err := newImageClient(false)
 	if err != nil {
-		return fmt.Errorf("failed to create Gemini client: %w", err)
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	fmt.Printf("Generating %s pattern: %s\n", patternType, description)
 	if patternStyle != "" {
 		fmt.Printf("Style: %s\n", patternStyle)
 	}
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s\n", model)
 
 	// Generate pattern
-	result, err := client.GenerateContent(prompt)
+	req := generationRequest(prompt, "", "", nil, false)
+	result, err := client.Generate(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("failed to generate pattern: %w", err)
 	}
 
 	// Generate filename (prefer AI-suggested name)
 	filename := filehandler.GenerateFilename(description, result.SuggestedName, "pattern", 0)
+	filename = applyOutputFormatExtension(filename)
 	outputPath := filepath.Join(patternOutput, filename)
 	outputPath = filehandler.EnsureUniqueFilename(outputPath)
 

@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
-	"imagemage/pkg/gemini"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -42,22 +42,28 @@ func runDiagram(cmd *cobra.Command, args []string) error {
 	prompt += "The diagram should be well-organized, easy to read, with clear labels, appropriate shapes/symbols, "
 	prompt += "connecting lines/arrows, and good visual hierarchy. Use a clean, technical style."
 
-	// Create Gemini client
-	client, err := gemini.NewClient()
+	client, provider, model, err := newImageClient(false)
 	if err != nil {
-		return fmt.Errorf("failed to create Gemini client: %w", err)
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	fmt.Printf("Generating %s: %s\n", diagramType, description)
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s\n", model)
 
 	// Generate diagram
-	result, err := client.GenerateContent(prompt)
+	req := generationRequest(prompt, "", "", nil, false)
+	if req.Quality == "auto" {
+		req.Quality = "high"
+	}
+	result, err := client.Generate(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("failed to generate diagram: %w", err)
 	}
 
 	// Generate filename (prefer AI-suggested name)
 	filename := filehandler.GenerateFilename(description, result.SuggestedName, diagramType, 0)
+	filename = applyOutputFormatExtension(filename)
 	outputPath := filepath.Join(diagramOutput, filename)
 	outputPath = filehandler.EnsureUniqueFilename(outputPath)
 

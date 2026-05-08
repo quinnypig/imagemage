@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"imagemage/pkg/filehandler"
 	"imagemage/pkg/gemini"
+	"imagemage/pkg/imagegen"
 	"imagemage/pkg/metadata"
 	"path/filepath"
 
@@ -27,10 +29,11 @@ var (
 var generateCmd = &cobra.Command{
 	Use:   "generate [prompt]",
 	Short: "Generate images from text descriptions",
-	Long: `Generate one or more images from a text prompt using Google's Gemini image models.
+	Long: `Generate one or more images from a text prompt using OpenAI Images or Gemini.
 
-By default, uses Gemini 3 Pro Image (gemini-3-pro-image-preview) for high-quality 4K generation.
-Use --frugal flag to switch to Nano Banana 2 (gemini-3.1-flash-image-preview) for Pro quality at Flash speed.
+By default, uses OpenAI Images via gpt-image-2. Use --provider=gemini to use Gemini
+image models. The --frugal flag is a deprecated low-cost alias; with Gemini it
+selects Nano Banana 2 (gemini-3.1-flash-image-preview).
 
 Examples:
   imagemage generate "watercolor painting of a fox in snowy forest"
@@ -52,7 +55,7 @@ func init() {
 	generateCmd.Flags().BoolVarP(&generatePreview, "preview", "p", false, "Show preview information")
 	generateCmd.Flags().StringVarP(&generateAspectRatio, "aspect-ratio", "a", "", "Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9, 5:4, 4:5)")
 	generateCmd.Flags().StringVarP(&generateResolution, "resolution", "r", "", "Image resolution (512px, 1K, 2K, 4K). Defaults to 4K")
-	generateCmd.Flags().BoolVarP(&generateFrugal, "frugal", "f", false, "Use Nano Banana 2 (faster, cheaper, still supports 4K)")
+	generateCmd.Flags().BoolVarP(&generateFrugal, "frugal", "f", false, "Deprecated alias for low-cost generation; with Gemini selects Nano Banana 2")
 	generateCmd.Flags().BoolVar(&generateSlide, "slide", false, "Optimize for presentation slides (4K, 16:9, with theme from config)")
 	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to config file (JSON) with style, colorScheme, additionalContext")
 	generateCmd.Flags().BoolVar(&generateForce, "force", false, "Overwrite existing files without confirmation")
@@ -94,7 +97,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Validate aspect ratio if provided
 	if generateAspectRatio != "" {
-		if err := gemini.ValidateAspectRatio(generateAspectRatio); err != nil {
+		if err := imagegen.ValidateAspectRatio(generateAspectRatio); err != nil {
 			return err
 		}
 	}
@@ -110,18 +113,9 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		fullPrompt = config.ApplyToPrompt(fullPrompt)
 	}
 
-	// Create Gemini client (frugal or default)
-	var client *gemini.Client
-	if generateFrugal {
-		client, err = gemini.NewFrugalClient()
-		if err != nil {
-			return fmt.Errorf("failed to create Gemini client: %w", err)
-		}
-	} else {
-		client, err = gemini.NewClient()
-		if err != nil {
-			return fmt.Errorf("failed to create Gemini client: %w", err)
-		}
+	client, provider, model, err := newImageClient(generateFrugal)
+	if err != nil {
+		return fmt.Errorf("failed to create image client: %w", err)
 	}
 
 	// Display generation info
@@ -141,14 +135,13 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		resolution = "4K"
 	}
 	fmt.Printf("Resolution: %s\n", resolution)
-	if generateFrugal {
-		fmt.Printf("Model: %s (Nano Banana 2)\n", gemini.ModelNameFrugal)
-	} else {
-		fmt.Printf("Model: %s\n", gemini.ModelName)
-	}
+	fmt.Printf("Provider: %s\n", provider)
+	fmt.Printf("Model: %s\n", model)
+	fmt.Printf("Quality: %s\n", generationRequest("", "", "", nil, generateFrugal).Quality)
 	fmt.Println()
 
 	successCount := 0
+	ctx := context.Background()
 	for i := 1; i <= generateCount; i++ {
 		if generateCount > 1 {
 			fmt.Printf("[%d/%d] Generating image...\n", i, generateCount)
@@ -156,8 +149,8 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 			fmt.Println("Generating image...")
 		}
 
-		// Generate image with resolution support
-		result, err := client.GenerateContentWithResolution(fullPrompt, generateResolution, generateAspectRatio)
+		req := generationRequest(fullPrompt, generateResolution, generateAspectRatio, nil, generateFrugal)
+		result, err := client.Generate(ctx, req)
 		if err != nil {
 			fmt.Printf("Error generating image %d: %v\n", i, err)
 			continue
@@ -170,6 +163,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		} else {
 			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", 0)
 		}
+		filename = applyOutputFormatExtension(filename)
 
 		// Create output path
 		outputPath := filepath.Join(generateOutput, filename)
@@ -183,7 +177,9 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 		// Store prompt in metadata if requested
 		if generateStorePrompt {
-			if err := metadata.AddPromptToPNG(outputPath, fullPrompt); err != nil {
+			if !canStorePNGMetadata() {
+				fmt.Printf("⚠️  Warning: prompt metadata is only supported for PNG output\n")
+			} else if err := metadata.AddPromptToPNG(outputPath, fullPrompt); err != nil {
 				fmt.Printf("⚠️  Warning: failed to store prompt in metadata: %v\n", err)
 				// Don't fail the whole operation just because metadata write failed
 			}
