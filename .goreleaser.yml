@@ -78,7 +78,7 @@ brews:
       name: homebrew-imagemage
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/quinnypig/imagemage
-    description: "A focused CLI tool for generating and editing images with Google's Gemini API without the bloat"
+    description: "A tiny CLI for bossing around OpenAI Images and Gemini without installing someone's KPI farm"
     license: MIT
     directory: Formula
     test: |
@@ -98,7 +98,7 @@ release:
   header: |
     ## What's New in {{ .Version }}
 
-    Another step toward making image generation with Gemini less painful.
+    OpenAI Images is now the default, with Gemini still available when you need Google's particular flavor of API archaeology.
   footer: |
     ## Installation
 
