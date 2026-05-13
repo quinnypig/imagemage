@@ -121,12 +121,13 @@ func (c *Client) Edit(ctx context.Context, req imagegen.Request) (imagegen.Resul
 			mimeType = "image/png"
 		}
 		ext := extensionForMime(mimeType)
-		// OpenAI's /v1/images/edits rejects parameters like `quality` when the
-		// image part's Content-Type is application/octet-stream (the default
-		// from multipart.Writer.CreateFormFile). Set the real MIME type so the
-		// edits endpoint accepts the modern parameter set.
+		// OpenAI's /v1/images/edits requires the array form (name="image[]")
+		// when more than one image is attached, and accepts it for single
+		// images too. The image part also needs its real MIME type — the
+		// default application/octet-stream from CreateFormFile causes the
+		// endpoint to reject modern parameters like `quality`.
 		header := make(textproto.MIMEHeader)
-		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="image"; filename="input-%d%s"`, i+1, ext))
+		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="image[]"; filename="input-%d%s"`, i+1, ext))
 		header.Set("Content-Type", mimeType)
 		part, err := writer.CreatePart(header)
 		if err != nil {

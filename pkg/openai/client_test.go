@@ -83,12 +83,14 @@ func TestEditSendsMultipartImages(t *testing.T) {
 			case "prompt":
 				data, _ := io.ReadAll(part)
 				gotPrompt = string(data)
-			case "image":
+			case "image[]":
 				gotImageCount++
 				gotImageContentTypes = append(gotImageContentTypes, part.Header.Get("Content-Type"))
 				if !strings.HasSuffix(part.FileName(), ".png") && !strings.HasSuffix(part.FileName(), ".jpg") {
 					t.Fatalf("unexpected filename, got %q", part.FileName())
 				}
+			case "image":
+				t.Fatalf("image part must use array name \"image[]\", got \"image\"")
 			default:
 				data, _ := io.ReadAll(part)
 				gotFields[part.FormName()] = string(data)
