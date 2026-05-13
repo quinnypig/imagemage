@@ -63,6 +63,8 @@ func TestEditSendsMultipartImages(t *testing.T) {
 	var gotPath string
 	var gotPrompt string
 	var gotImageCount int
+	var gotImageContentTypes []string
+	gotFields := map[string]string{}
 	httpClient := roundTripClient(func(r *http.Request) (*http.Response, error) {
 		gotPath = r.URL.Path
 		reader, err := r.MultipartReader()
@@ -83,9 +85,13 @@ func TestEditSendsMultipartImages(t *testing.T) {
 				gotPrompt = string(data)
 			case "image":
 				gotImageCount++
-				if !strings.HasSuffix(part.FileName(), ".png") {
-					t.Fatalf("expected png filename, got %q", part.FileName())
+				gotImageContentTypes = append(gotImageContentTypes, part.Header.Get("Content-Type"))
+				if !strings.HasSuffix(part.FileName(), ".png") && !strings.HasSuffix(part.FileName(), ".jpg") {
+					t.Fatalf("unexpected filename, got %q", part.FileName())
 				}
+			default:
+				data, _ := io.ReadAll(part)
+				gotFields[part.FormName()] = string(data)
 			}
 		}
 		return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
@@ -97,10 +103,12 @@ func TestEditSendsMultipartImages(t *testing.T) {
 	}
 
 	_, err = client.Edit(context.Background(), imagegen.Request{
-		Prompt: "make it warmer",
+		Prompt:       "make it warmer",
+		Quality:      "high",
+		OutputFormat: "png",
 		Images: []imagegen.ImageInput{
 			{MimeType: "image/png", Base64: tinyPNGBase64},
-			{MimeType: "image/png", Base64: tinyPNGBase64},
+			{MimeType: "image/jpeg", Base64: tinyPNGBase64},
 		},
 	})
 	if err != nil {
@@ -115,6 +123,24 @@ func TestEditSendsMultipartImages(t *testing.T) {
 	}
 	if gotImageCount != 2 {
 		t.Fatalf("expected 2 images, got %d", gotImageCount)
+	}
+	// Regression: OpenAI's edits endpoint rejects modern parameters like
+	// `quality` when the image part Content-Type is application/octet-stream.
+	// Each image part must carry its actual MIME type.
+	wantCTs := []string{"image/png", "image/jpeg"}
+	for i, ct := range gotImageContentTypes {
+		if ct != wantCTs[i] {
+			t.Fatalf("image %d: expected Content-Type %q, got %q", i, wantCTs[i], ct)
+		}
+	}
+	if gotFields["quality"] != "high" {
+		t.Fatalf("expected quality=high, got %q", gotFields["quality"])
+	}
+	if gotFields["output_format"] != "png" {
+		t.Fatalf("expected output_format=png, got %q", gotFields["output_format"])
+	}
+	if gotFields["model"] != "test-image-model" {
+		t.Fatalf("expected model=test-image-model, got %q", gotFields["model"])
 	}
 }
 

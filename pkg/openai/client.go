@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"strings"
 	"time"
@@ -120,7 +121,14 @@ func (c *Client) Edit(ctx context.Context, req imagegen.Request) (imagegen.Resul
 			mimeType = "image/png"
 		}
 		ext := extensionForMime(mimeType)
-		part, err := writer.CreateFormFile("image", fmt.Sprintf("input-%d%s", i+1, ext))
+		// OpenAI's /v1/images/edits rejects parameters like `quality` when the
+		// image part's Content-Type is application/octet-stream (the default
+		// from multipart.Writer.CreateFormFile). Set the real MIME type so the
+		// edits endpoint accepts the modern parameter set.
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="image"; filename="input-%d%s"`, i+1, ext))
+		header.Set("Content-Type", mimeType)
+		part, err := writer.CreatePart(header)
 		if err != nil {
 			return imagegen.Result{}, fmt.Errorf("failed to create image form part: %w", err)
 		}
