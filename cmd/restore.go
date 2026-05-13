@@ -67,7 +67,8 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	if outputPath == "" {
 		ext := filepath.Ext(imagePath)
 		base := strings.TrimSuffix(imagePath, ext)
-		outputPath = base + "_restored" + imageFileExtension()
+		dir, stem := filepath.Split(base)
+		outputPath = dir + filehandler.SanitizeFilenameStem(stem) + "_restored" + imageFileExtension()
 	}
 
 	outputPath = filehandler.EnsureUniqueFilename(outputPath)

@@ -65,6 +65,21 @@ func TestValidateSuggestedName(t *testing.T) {
 			input:    "hello-world",
 			expected: "hello-world",
 		},
+		{
+			name:     "triple dashes collapse to single",
+			input:    "chapter---one",
+			expected: "chapter-one",
+		},
+		{
+			name:     "spaces around dashes collapse cleanly",
+			input:    "foo - - bar",
+			expected: "foo_bar",
+		},
+		{
+			name:     "leading and trailing dashes trimmed",
+			input:    "---hello---",
+			expected: "hello",
+		},
 	}
 
 	for _, tt := range tests {
@@ -166,6 +181,22 @@ func TestGenerateFilename(t *testing.T) {
 			count:         1,
 			expected:      "simple_1.png",
 		},
+		{
+			name:          "prompt with triple dashes collapses",
+			prompt:        "chapter---one rising",
+			suggestedName: "",
+			prefix:        "",
+			count:         0,
+			expected:      "chapter-one_rising.png",
+		},
+		{
+			name:          "suggested name with multiple dashes collapses",
+			prompt:        "scene",
+			suggestedName: "ember---wyrm",
+			prefix:        "",
+			count:         0,
+			expected:      "ember-wyrm.png",
+		},
 	}
 
 	for _, tt := range tests {
@@ -174,6 +205,32 @@ func TestGenerateFilename(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("GenerateFilename(%q, %q, %q, %d) = %q, want %q",
 					tt.prompt, tt.suggestedName, tt.prefix, tt.count, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSanitizeFilenameStem(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"single dash preserved", "hello-world", "hello-world"},
+		{"triple dash collapses", "chapter---one", "chapter-one"},
+		{"long run of dashes collapses", "a----------b", "a-b"},
+		{"mixed dash and underscore", "foo-_-bar", "foo_bar"},
+		{"underscore run collapses", "foo___bar", "foo_bar"},
+		{"leading and trailing trimmed", "---hello-world---", "hello-world"},
+		{"only separators returns empty", "---___---", ""},
+		{"empty input", "", ""},
+		{"no separators", "abc123", "abc123"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SanitizeFilenameStem(tt.input)
+			if got != tt.expected {
+				t.Errorf("SanitizeFilenameStem(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}

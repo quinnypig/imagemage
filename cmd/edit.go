@@ -88,6 +88,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	if outputPath == "" {
 		ext := filepath.Ext(baseImagePath)
 		baseName := strings.TrimSuffix(filepath.Base(baseImagePath), ext)
+		baseName = filehandler.SanitizeFilenameStem(baseName)
 		outputPath = filepath.Join(filepath.Dir(baseImagePath), baseName+"-edited"+imageFileExtension())
 	}
 

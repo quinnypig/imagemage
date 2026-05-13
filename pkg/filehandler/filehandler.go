@@ -85,10 +85,23 @@ func cleanPrompt(prompt string) string {
 	reg = regexp.MustCompile(`\s+`)
 	s = reg.ReplaceAllString(s, "_")
 
-	// Remove leading/trailing underscores
-	s = strings.Trim(s, "_")
+	return SanitizeFilenameStem(s)
+}
 
-	return s
+// SanitizeFilenameStem collapses runs of separator chars ('-' and '_') to a
+// single separator and trims them from the edges. A pure run of hyphens stays
+// a single '-' (so "hello-world" survives), but anything containing '_' (or
+// mixing both) becomes '_'. This prevents filenames like "foo---bar.png" that
+// can break YAML referencing or look like document separators.
+func SanitizeFilenameStem(s string) string {
+	reg := regexp.MustCompile(`[-_]+`)
+	s = reg.ReplaceAllStringFunc(s, func(m string) string {
+		if strings.ContainsRune(m, '_') {
+			return "_"
+		}
+		return "-"
+	})
+	return strings.Trim(s, "-_")
 }
 
 // validateSuggestedName checks if a suggested name is usable
