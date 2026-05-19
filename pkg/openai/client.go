@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"imagemage/pkg/imagegen"
+	"imagemage/pkg/metadata"
 )
 
 const (
@@ -253,8 +254,20 @@ func (c *Client) extractResult(body []byte) (imagegen.Result, error) {
 	if len(result.Data) == 0 || result.Data[0].B64JSON == "" {
 		return imagegen.Result{}, fmt.Errorf("no image data found in response")
 	}
+	// Strip C2PA / XMP / EXIF before handing the image to downstream code so
+	// platforms like LinkedIn and Twitter don't auto-label posts as AI-generated
+	// from embedded provenance manifests. SynthID is a pixel-domain watermark
+	// and is unaffected.
+	decoded, err := base64.StdEncoding.DecodeString(result.Data[0].B64JSON)
+	if err != nil {
+		return imagegen.Result{}, fmt.Errorf("failed to decode image data: %w", err)
+	}
+	stripped, err := metadata.StripProvenance(decoded)
+	if err != nil {
+		return imagegen.Result{}, fmt.Errorf("failed to strip provenance metadata: %w", err)
+	}
 	return imagegen.Result{
-		ImageData: result.Data[0].B64JSON,
+		ImageData: base64.StdEncoding.EncodeToString(stripped),
 		Provider:  imagegen.ProviderOpenAI,
 		Model:     c.model,
 	}, nil
