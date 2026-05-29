@@ -119,10 +119,15 @@ imagemage generate "concept art" --quality=low --count=5
 
 # Use Gemini instead of OpenAI
 imagemage generate "concept art" --provider=gemini
+
+# Condition generation on reference image(s) without editing them
+imagemage generate "this character riding a bike" --reference char.png
+imagemage generate "a poster in this art style" -i style1.png -i style2.png
 ```
 
 **Useful Flags:**
 - `-c, --count` - Number of images to generate (default: 1)
+- `-i, --reference` - Reference image(s) to condition generation on (can be used multiple times)
 - `-o, --output` - Output directory (default: current directory, because obviously)
 - `-s, --style` - Additional style guidance for when your prompt needs more... guidance
 - `-a, --aspect-ratio` - Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9, 5:4, 4:5)
