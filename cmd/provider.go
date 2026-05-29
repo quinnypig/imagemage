@@ -15,10 +15,14 @@ import (
 )
 
 var (
-	cliProvider string
-	cliModel    string
-	cliQuality  string
-	cliFormat   string
+	cliProvider    string
+	cliModel       string
+	cliQuality     string
+	cliFormat      string
+	cliBackground  string
+	cliFidelity    string
+	cliModeration  string
+	cliCompression int
 )
 
 func init() {
@@ -26,6 +30,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cliModel, "model", "", "Provider model override")
 	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, auto")
 	rootCmd.PersistentFlags().StringVar(&cliFormat, "format", "png", "Output format for providers that support it: png, jpeg, webp")
+	rootCmd.PersistentFlags().StringVar(&cliBackground, "background", "", "Background (OpenAI): transparent, opaque, auto. Transparent requires png/webp")
+	rootCmd.PersistentFlags().StringVar(&cliFidelity, "fidelity", "", "Input fidelity for reference/edit images (OpenAI): high or low")
+	rootCmd.PersistentFlags().StringVar(&cliModeration, "moderation", "", "Moderation strictness (OpenAI): low or auto")
+	rootCmd.PersistentFlags().IntVar(&cliCompression, "compression", 0, "Output compression 0-100 for jpeg/webp (OpenAI)")
 }
 
 func newImageClient(frugal bool) (imagegen.Client, imagegen.Provider, string, error) {
@@ -46,6 +54,9 @@ func newImageClient(frugal bool) (imagegen.Client, imagegen.Provider, string, er
 		client, err := openai.NewClient(model)
 		return client, provider, model, err
 	case imagegen.ProviderGemini:
+		if cliBackground != "" || cliFidelity != "" || cliModeration != "" || cliCompression != 0 {
+			fmt.Fprintln(os.Stderr, "⚠️  --background/--fidelity/--moderation/--compression are OpenAI-only and ignored by Gemini")
+		}
 		if model == "" && frugal {
 			model = gemini.ModelNameFrugal
 		}
@@ -65,12 +76,16 @@ func generationRequest(prompt, resolution, aspectRatio string, images []imagegen
 		quality = "low"
 	}
 	return imagegen.Request{
-		Prompt:       prompt,
-		Images:       images,
-		AspectRatio:  aspectRatio,
-		Resolution:   resolution,
-		Quality:      quality,
-		OutputFormat: cliFormat,
+		Prompt:        prompt,
+		Images:        images,
+		AspectRatio:   aspectRatio,
+		Resolution:    resolution,
+		Quality:       quality,
+		OutputFormat:  cliFormat,
+		Background:    cliBackground,
+		InputFidelity: cliFidelity,
+		Moderation:    cliModeration,
+		Compression:   cliCompression,
 	}
 }
 

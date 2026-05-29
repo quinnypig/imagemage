@@ -69,7 +69,10 @@ func GenerateFilename(prompt, suggestedName, prefix string, count int) string {
 		filename = fmt.Sprintf("%s_%d", filename, count)
 	}
 
-	return filename + ".png"
+	// Sanitize the fully assembled stem (not just the prompt/suggested-name
+	// part) so an unsanitized prefix can't reintroduce runs like "foo--bar"
+	// that break some markdown renderers.
+	return SanitizeFilenameStem(filename) + ".png"
 }
 
 // cleanPrompt converts a prompt into a filename-safe string

@@ -169,28 +169,44 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Quality: %s\n", generationRequest("", "", "", nil, generateFrugal).Quality)
 	fmt.Println()
 
-	successCount := 0
 	ctx := context.Background()
-	for i := 1; i <= generateCount; i++ {
-		if generateCount > 1 {
-			fmt.Printf("[%d/%d] Generating image...\n", i, generateCount)
-		} else {
-			fmt.Println("Generating image...")
-		}
+	req := generationRequest(fullPrompt, generateResolution, generateAspectRatio, references, generateFrugal)
 
-		req := generationRequest(fullPrompt, generateResolution, generateAspectRatio, references, generateFrugal)
-		// providerAction routes to the reference-capable Edit path when
-		// references are present, and to plain text-to-image otherwise.
-		result, err := providerAction(ctx, client, req)
+	// Collect results. When the provider supports batching (OpenAI's `n`), ask
+	// for all images in a single API call; otherwise fall back to one call per
+	// image (Gemini returns one image per request). providerAction routes to the
+	// reference-capable Edit path when references are present.
+	var results []imagegen.Result
+	if bg, ok := client.(imagegen.BatchGenerator); ok && generateCount > 1 {
+		fmt.Printf("Requesting %d images in a single call...\n", generateCount)
+		batchReq := req
+		batchReq.Count = generateCount
+		results, err = bg.GenerateBatch(ctx, batchReq)
 		if err != nil {
-			fmt.Printf("Error generating image %d: %v\n", i, err)
-			continue
+			return fmt.Errorf("failed to generate images: %w", err)
 		}
+	} else {
+		for i := 1; i <= generateCount; i++ {
+			if generateCount > 1 {
+				fmt.Printf("[%d/%d] Generating image...\n", i, generateCount)
+			} else {
+				fmt.Println("Generating image...")
+			}
+			result, err := providerAction(ctx, client, req)
+			if err != nil {
+				fmt.Printf("Error generating image %d: %v\n", i, err)
+				continue
+			}
+			results = append(results, result)
+		}
+	}
 
+	successCount := 0
+	for idx, result := range results {
 		// Generate filename (prefer AI-suggested name)
 		var filename string
 		if generateCount > 1 {
-			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", i)
+			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", idx+1)
 		} else {
 			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", 0)
 		}
@@ -202,7 +218,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 		// Save image
 		if err := filehandler.SaveImage(result.ImageData, outputPath); err != nil {
-			fmt.Printf("Error saving image %d: %v\n", i, err)
+			fmt.Printf("Error saving image %d: %v\n", idx+1, err)
 			continue
 		}
 

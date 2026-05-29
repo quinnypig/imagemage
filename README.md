@@ -140,6 +140,14 @@ imagemage generate "a poster in this art style" -i style1.png -i style2.png
 - `--slide` - Optimized for presentation slides (4K, 16:9)
 - `--store-prompt` - Save the prompt in the image metadata (for reproducibility)
 
+**OpenAI-only Options** (ignored by Gemini, which warns if you set them):
+- `--background` - `transparent`, `opaque`, or `auto`. Transparent requires `--format=png` or `webp`. Great for icons and logos.
+- `--fidelity` - `high` or `low`. With reference/edit images, `high` preserves faces, logos, and fine detail more faithfully.
+- `--moderation` - `low` or `auto`. Relaxes the content filter when appropriate.
+- `--compression` - `0`-`100` output compression for `jpeg`/`webp`.
+
+With OpenAI, `--count` requests all images in a single batched API call (`n`), rather than one call per image.
+
 **Supported Aspect Ratios:**
 - **Square:** 1:1 (1024x1024) - The default, for some reason
 - **Landscape:** 16:9 (1344x768), 4:3, 3:2, 21:9 - For when you want it wider

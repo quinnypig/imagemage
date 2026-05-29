@@ -179,6 +179,108 @@ func TestGenerateRetriesWithFreshBody(t *testing.T) {
 	}
 }
 
+func TestGenerateBatchRequestsMultiple(t *testing.T) {
+	var reqBody map[string]any
+	httpClient := roundTripClient(func(r *http.Request) (*http.Response, error) {
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			t.Fatalf("failed to decode request: %v", err)
+		}
+		return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"},{"b64_json":"`+tinyPNGBase64+`"},{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
+	})
+
+	client, err := openai.NewClient("test-image-model", openai.WithAPIKey("test-key"), openai.WithBaseURL("https://example.test/v1/images"), openai.WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("unexpected client error: %v", err)
+	}
+
+	results, err := client.GenerateBatch(context.Background(), imagegen.Request{Prompt: "three at once", Count: 3})
+	if err != nil {
+		t.Fatalf("unexpected batch error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	if n, _ := reqBody["n"].(float64); n != 3 {
+		t.Fatalf("expected n=3 in request, got %v", reqBody["n"])
+	}
+}
+
+func TestGenerateSendsBackgroundAndModeration(t *testing.T) {
+	var reqBody map[string]any
+	httpClient := roundTripClient(func(r *http.Request) (*http.Response, error) {
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
+	})
+	client, _ := openai.NewClient("test-image-model", openai.WithAPIKey("test-key"), openai.WithBaseURL("https://example.test/v1/images"), openai.WithHTTPClient(httpClient))
+
+	_, err := client.Generate(context.Background(), imagegen.Request{
+		Prompt:       "logo",
+		OutputFormat: "png",
+		Background:   "transparent",
+		Moderation:   "low",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertField(t, reqBody, "background", "transparent")
+	assertField(t, reqBody, "moderation", "low")
+}
+
+func TestTransparentBackgroundRejectsJPEG(t *testing.T) {
+	client, _ := openai.NewClient("test-image-model", openai.WithAPIKey("test-key"), openai.WithBaseURL("https://example.test/v1/images"))
+	_, err := client.Generate(context.Background(), imagegen.Request{
+		Prompt:       "logo",
+		OutputFormat: "jpeg",
+		Background:   "transparent",
+	})
+	if err == nil || !strings.Contains(err.Error(), "transparent background requires png or webp") {
+		t.Fatalf("expected transparent/jpeg validation error, got %v", err)
+	}
+}
+
+func TestEditSendsFidelityAndCompression(t *testing.T) {
+	gotFields := map[string]string{}
+	httpClient := roundTripClient(func(r *http.Request) (*http.Response, error) {
+		reader, err := r.MultipartReader()
+		if err != nil {
+			t.Fatalf("expected multipart: %v", err)
+		}
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("multipart read error: %v", err)
+			}
+			if part.FormName() == "image[]" {
+				continue
+			}
+			data, _ := io.ReadAll(part)
+			gotFields[part.FormName()] = string(data)
+		}
+		return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
+	})
+	client, _ := openai.NewClient("test-image-model", openai.WithAPIKey("test-key"), openai.WithBaseURL("https://example.test/v1/images"), openai.WithHTTPClient(httpClient))
+
+	_, err := client.Edit(context.Background(), imagegen.Request{
+		Prompt:        "preserve the face",
+		OutputFormat:  "webp",
+		InputFidelity: "high",
+		Compression:   80,
+		Images:        []imagegen.ImageInput{{MimeType: "image/png", Base64: tinyPNGBase64}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected edit error: %v", err)
+	}
+	if gotFields["input_fidelity"] != "high" {
+		t.Fatalf("expected input_fidelity=high, got %q", gotFields["input_fidelity"])
+	}
+	if gotFields["output_compression"] != "80" {
+		t.Fatalf("expected output_compression=80, got %q", gotFields["output_compression"])
+	}
+}
+
 func assertField(t *testing.T, body map[string]any, field string, want string) {
 	t.Helper()
 	got, ok := body[field].(string)

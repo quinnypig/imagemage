@@ -142,6 +142,14 @@ func TestGenerateFilename(t *testing.T) {
 			expected:      "pattern_geometric_pattern.png",
 		},
 		{
+			name:          "collapses double dashes from unsanitized prefix",
+			prompt:        "circuit board",
+			suggestedName: "",
+			prefix:        "flow--chart",
+			count:         0,
+			expected:      "flow-chart_circuit_board.png",
+		},
+		{
 			name:          "adds count when specified",
 			prompt:        "mountain landscape",
 			suggestedName: "alpine vista",
