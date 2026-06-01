@@ -24,6 +24,20 @@ type Request struct {
 	Resolution   string
 	Quality      string
 	OutputFormat string
+	// Background controls transparency: "transparent", "opaque", or "auto".
+	// Transparent output requires a format that supports it (png or webp).
+	Background string
+	// InputFidelity asks the model to preserve detail from input images
+	// ("high" or "low"). Only meaningful when Images are supplied.
+	InputFidelity string
+	// Moderation selects the content-moderation strictness: "low" or "auto".
+	Moderation string
+	// Compression is the output compression (0-100) for lossy formats
+	// (jpeg, webp). Zero means "leave unset / provider default".
+	Compression int
+	// Count is the number of images to request in a single batched call.
+	// Zero or one means a single image. Only honored by BatchGenerator.
+	Count int
 }
 
 type Result struct {
@@ -36,6 +50,16 @@ type Result struct {
 type Client interface {
 	Generate(ctx context.Context, req Request) (Result, error)
 	Edit(ctx context.Context, req Request) (Result, error)
+}
+
+// BatchGenerator is an optional capability for providers that can return
+// multiple images from a single API call (e.g. OpenAI's `n` parameter).
+// Callers should type-assert against it and fall back to repeated Generate/Edit
+// calls for providers that do not implement it (such as Gemini, which returns
+// one image per request). It routes to the reference-capable edit path when
+// req.Images is non-empty, mirroring providerAction.
+type BatchGenerator interface {
+	GenerateBatch(ctx context.Context, req Request) ([]Result, error)
 }
 
 var SupportedAspectRatios = []string{

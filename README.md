@@ -119,10 +119,15 @@ imagemage generate "concept art" --quality=low --count=5
 
 # Use Gemini instead of OpenAI
 imagemage generate "concept art" --provider=gemini
+
+# Condition generation on reference image(s) without editing them
+imagemage generate "this character riding a bike" --reference char.png
+imagemage generate "a poster in this art style" -i style1.png -i style2.png
 ```
 
 **Useful Flags:**
 - `-c, --count` - Number of images to generate (default: 1)
+- `-i, --reference` - Reference image(s) to condition generation on (can be used multiple times)
 - `-o, --output` - Output directory (default: current directory, because obviously)
 - `-s, --style` - Additional style guidance for when your prompt needs more... guidance
 - `-a, --aspect-ratio` - Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9, 5:4, 4:5)
@@ -134,6 +139,14 @@ imagemage generate "concept art" --provider=gemini
 - `-f, --frugal` - Deprecated alias for low-cost generation; with Gemini it selects Nano Banana 2
 - `--slide` - Optimized for presentation slides (4K, 16:9)
 - `--store-prompt` - Save the prompt in the image metadata (for reproducibility)
+
+**OpenAI-only Options** (ignored by Gemini, which warns if you set them):
+- `--background` - `transparent`, `opaque`, or `auto`. Transparent requires `--format=png` or `webp`. Great for icons and logos.
+- `--fidelity` - `high` or `low`. With reference/edit images, `high` preserves faces, logos, and fine detail more faithfully.
+- `--moderation` - `low` or `auto`. Relaxes the content filter when appropriate.
+- `--compression` - `0`-`100` output compression for `jpeg`/`webp`.
+
+With OpenAI, `--count` requests all images in a single batched API call (`n`), rather than one call per image.
 
 **Supported Aspect Ratios:**
 - **Square:** 1:1 (1024x1024) - The default, for some reason

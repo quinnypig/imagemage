@@ -7,6 +7,7 @@ import (
 	"imagemage/pkg/gemini"
 	"imagemage/pkg/imagegen"
 	"imagemage/pkg/metadata"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -24,6 +25,7 @@ var (
 	generateConfig      string
 	generateForce       bool
 	generateStorePrompt bool
+	generateReferences  []string
 )
 
 var generateCmd = &cobra.Command{
@@ -35,13 +37,19 @@ By default, uses OpenAI Images via gpt-image-2. Use --provider=gemini to use Gem
 image models. The --frugal flag is a deprecated low-cost alias; with Gemini it
 selects Nano Banana 2 (gemini-3.1-flash-image-preview).
 
+Reference images can guide generation: pass one or more with --reference to
+condition the output on existing imagery (style, subject, composition) without
+editing those images directly. This works on both providers.
+
 Examples:
   imagemage generate "watercolor painting of a fox in snowy forest"
   imagemage generate "mountain landscape" --count=3 --output=./images
   imagemage generate "cyberpunk city" --style="neon, futuristic"
   imagemage generate "wide cinematic shot" --aspect-ratio="21:9"
   imagemage generate "phone wallpaper" --aspect-ratio="9:16"
-  imagemage generate "concept art" --frugal`,
+  imagemage generate "concept art" --frugal
+  imagemage generate "this character riding a bike" --reference char.png
+  imagemage generate "a poster in this art style" -i style1.png -i style2.png`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runGenerate,
 }
@@ -60,6 +68,7 @@ func init() {
 	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to config file (JSON) with style, colorScheme, additionalContext")
 	generateCmd.Flags().BoolVar(&generateForce, "force", false, "Overwrite existing files without confirmation")
 	generateCmd.Flags().BoolVar(&generateStorePrompt, "store-prompt", false, "Store prompt in PNG metadata for reproducibility")
+	generateCmd.Flags().StringArrayVarP(&generateReferences, "reference", "i", []string{}, "Reference image(s) to condition generation on (can be used multiple times)")
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
@@ -113,6 +122,23 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		fullPrompt = config.ApplyToPrompt(fullPrompt)
 	}
 
+	// Load reference images if provided. References condition generation but,
+	// unlike `edit`, are not themselves modified in place.
+	var references []imagegen.ImageInput
+	for _, refPath := range generateReferences {
+		if _, err := os.Stat(refPath); os.IsNotExist(err) {
+			return fmt.Errorf("reference image not found: %s", refPath)
+		}
+		ref, err := loadImageInput(refPath)
+		if err != nil {
+			return fmt.Errorf("failed to load reference image %s: %w", refPath, err)
+		}
+		references = append(references, ref)
+	}
+	if len(references) > 14 {
+		return fmt.Errorf("too many reference images (%d). Maximum is 14", len(references))
+	}
+
 	client, provider, model, err := newImageClient(generateFrugal)
 	if err != nil {
 		return fmt.Errorf("failed to create image client: %w", err)
@@ -120,6 +146,9 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Display generation info
 	fmt.Printf("Generating %d image(s) for: %s\n", generateCount, prompt)
+	if len(references) > 0 {
+		fmt.Printf("Reference images: %d\n", len(references))
+	}
 	if config != nil {
 		fmt.Printf("Config: Loaded (theme applied to prompt)\n")
 	}
@@ -140,26 +169,44 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Quality: %s\n", generationRequest("", "", "", nil, generateFrugal).Quality)
 	fmt.Println()
 
-	successCount := 0
 	ctx := context.Background()
-	for i := 1; i <= generateCount; i++ {
-		if generateCount > 1 {
-			fmt.Printf("[%d/%d] Generating image...\n", i, generateCount)
-		} else {
-			fmt.Println("Generating image...")
-		}
+	req := generationRequest(fullPrompt, generateResolution, generateAspectRatio, references, generateFrugal)
 
-		req := generationRequest(fullPrompt, generateResolution, generateAspectRatio, nil, generateFrugal)
-		result, err := client.Generate(ctx, req)
+	// Collect results. When the provider supports batching (OpenAI's `n`), ask
+	// for all images in a single API call; otherwise fall back to one call per
+	// image (Gemini returns one image per request). providerAction routes to the
+	// reference-capable Edit path when references are present.
+	var results []imagegen.Result
+	if bg, ok := client.(imagegen.BatchGenerator); ok && generateCount > 1 {
+		fmt.Printf("Requesting %d images in a single call...\n", generateCount)
+		batchReq := req
+		batchReq.Count = generateCount
+		results, err = bg.GenerateBatch(ctx, batchReq)
 		if err != nil {
-			fmt.Printf("Error generating image %d: %v\n", i, err)
-			continue
+			return fmt.Errorf("failed to generate images: %w", err)
 		}
+	} else {
+		for i := 1; i <= generateCount; i++ {
+			if generateCount > 1 {
+				fmt.Printf("[%d/%d] Generating image...\n", i, generateCount)
+			} else {
+				fmt.Println("Generating image...")
+			}
+			result, err := providerAction(ctx, client, req)
+			if err != nil {
+				fmt.Printf("Error generating image %d: %v\n", i, err)
+				continue
+			}
+			results = append(results, result)
+		}
+	}
 
+	successCount := 0
+	for idx, result := range results {
 		// Generate filename (prefer AI-suggested name)
 		var filename string
 		if generateCount > 1 {
-			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", i)
+			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", idx+1)
 		} else {
 			filename = filehandler.GenerateFilename(prompt, result.SuggestedName, "", 0)
 		}
@@ -171,7 +218,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 		// Save image
 		if err := filehandler.SaveImage(result.ImageData, outputPath); err != nil {
-			fmt.Printf("Error saving image %d: %v\n", i, err)
+			fmt.Printf("Error saving image %d: %v\n", idx+1, err)
 			continue
 		}
 
