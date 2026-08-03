@@ -35,6 +35,20 @@ By default, uses OpenAI Images via gpt-image-2. Use --provider=gemini to use Gem
 image models. The --frugal flag is a deprecated low-cost alias; with Gemini it
 selects Nano Banana 2 (gemini-3.1-flash-image-preview).
 
+A config file supplies default theme settings, applied when --config or --slide is
+passed (searched at ./image-gen.config.json, then ~/src/talks/image-gen.defaults.json,
+if --config gives no path). All keys are optional:
+
+  {
+    "defaults": {
+      "aspectRatio": "16:9",
+      "resolution": "4K",
+      "style": "flat vector illustration",
+      "colorScheme": "warm pastels",
+      "additionalContext": "artwork for a conference talk"
+    }
+  }
+
 Examples:
   imagemage generate "watercolor painting of a fox in snowy forest"
   imagemage generate "mountain landscape" --count=3 --output=./images
@@ -57,7 +71,7 @@ func init() {
 	generateCmd.Flags().StringVarP(&generateResolution, "resolution", "r", "", "Image resolution (512px, 1K, 2K, 4K). Defaults to 4K")
 	generateCmd.Flags().BoolVarP(&generateFrugal, "frugal", "f", false, "Deprecated alias for low-cost generation; with Gemini selects Nano Banana 2")
 	generateCmd.Flags().BoolVar(&generateSlide, "slide", false, "Optimize for presentation slides (4K, 16:9, with theme from config)")
-	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to config file (JSON) with style, colorScheme, additionalContext")
+	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to JSON config file with theme defaults (see example above; auto-discovers ./image-gen.config.json if no path given)")
 	generateCmd.Flags().BoolVar(&generateForce, "force", false, "Overwrite existing files without confirmation")
 	generateCmd.Flags().BoolVar(&generateStorePrompt, "store-prompt", false, "Store prompt in PNG metadata for reproducibility")
 }

@@ -30,7 +30,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(diagramCmd)
 
-	diagramCmd.Flags().StringVar(&diagramType, "type", "diagram", "Diagram type: flowchart, architecture, sequence, entity-relationship")
+	diagramCmd.Flags().StringVar(&diagramType, "type", "diagram", "Diagram type, used verbatim in the prompt: flowchart, architecture, sequence, entity-relationship, or any free-text type")
 	diagramCmd.Flags().StringVarP(&diagramOutput, "output", "o", ".", "Output directory")
 }
 

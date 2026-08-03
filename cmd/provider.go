@@ -23,9 +23,9 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cliProvider, "provider", "", "Image provider: openai or gemini (default: IMAGEMAGE_PROVIDER or openai)")
-	rootCmd.PersistentFlags().StringVar(&cliModel, "model", "", "Provider model override")
-	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, auto")
-	rootCmd.PersistentFlags().StringVar(&cliFormat, "format", "png", "Output format for providers that support it: png, jpeg, webp")
+	rootCmd.PersistentFlags().StringVar(&cliModel, "model", "", fmt.Sprintf("Provider model override (openai default: %s; gemini default: %s, or %s with --frugal)", openai.ModelName, gemini.ModelName, gemini.ModelNameFrugal))
+	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, auto (OpenAI only; ignored by Gemini)")
+	rootCmd.PersistentFlags().StringVar(&cliFormat, "format", "png", "Output format: png, jpeg, webp (OpenAI only; Gemini always outputs png)")
 }
 
 func newImageClient(frugal bool) (imagegen.Client, imagegen.Provider, string, error) {
