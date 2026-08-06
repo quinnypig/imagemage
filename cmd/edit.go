@@ -21,6 +21,7 @@ var (
 	editFrugal      bool
 	editForce       bool
 	editStorePrompt bool
+	editPromptFile  string
 )
 
 var editCmd = &cobra.Command{
@@ -41,8 +42,11 @@ Examples:
   imagemage edit scene.png "put these people here" -i person1.png -i person2.png
 
   # Complex composition
-  imagemage edit office.png "add this person and this laptop" -i person.png -i laptop.png`,
-	Args: cobra.ExactArgs(2),
+  imagemage edit office.png "add this person and this laptop" -i person.png -i laptop.png
+
+  # Read instruction from a file
+  imagemage edit photo.png --prompt-file ./instruction.txt`,
+	Args: cobra.RangeArgs(1, 2),
 	RunE: runEdit,
 }
 
@@ -56,11 +60,15 @@ func init() {
 	editCmd.Flags().BoolVarP(&editFrugal, "frugal", "f", false, "Deprecated alias for low-cost generation; with Gemini selects Nano Banana 2")
 	editCmd.Flags().BoolVar(&editForce, "force", false, "Overwrite output file if it exists")
 	editCmd.Flags().BoolVar(&editStorePrompt, "store-prompt", false, "Store instruction in PNG metadata")
+	addPromptFileFlag(editCmd, &editPromptFile)
 }
 
 func runEdit(cmd *cobra.Command, args []string) error {
 	baseImagePath := args[0]
-	instruction := args[1]
+	instruction, err := resolvePrompt(optionalArg(args, 1), editPromptFile)
+	if err != nil {
+		return err
+	}
 
 	// Check if base image exists
 	if _, err := os.Stat(baseImagePath); os.IsNotExist(err) {

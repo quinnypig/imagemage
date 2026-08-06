@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	patternType   string
-	patternStyle  string
-	patternOutput string
+	patternType       string
+	patternStyle      string
+	patternOutput     string
+	patternPromptFile string
 )
 
 var patternCmd = &cobra.Command{
@@ -23,8 +24,9 @@ var patternCmd = &cobra.Command{
 Examples:
   imagemage pattern "geometric triangles"
   imagemage pattern "floral" --type="seamless" --style="watercolor"
-  imagemage pattern "hexagons" --style="minimal, modern"`,
-	Args: cobra.MinimumNArgs(1),
+  imagemage pattern "hexagons" --style="minimal, modern"
+  imagemage pattern --prompt-file ./pattern.txt`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runPattern,
 }
 
@@ -34,10 +36,14 @@ func init() {
 	patternCmd.Flags().StringVar(&patternType, "type", "seamless", "Pattern type: seamless, tiled, texture")
 	patternCmd.Flags().StringVarP(&patternStyle, "style", "s", "", "Pattern style")
 	patternCmd.Flags().StringVarP(&patternOutput, "output", "o", ".", "Output directory")
+	addPromptFileFlag(patternCmd, &patternPromptFile)
 }
 
 func runPattern(cmd *cobra.Command, args []string) error {
-	description := args[0]
+	description, err := resolvePrompt(optionalArg(args, 0), patternPromptFile)
+	if err != nil {
+		return err
+	}
 
 	// Build prompt
 	prompt := fmt.Sprintf("Create a %s pattern: %s", patternType, description)
