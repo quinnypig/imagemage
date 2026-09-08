@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ModelName      = "gpt-image-2"
+	ModelName      = "gpt-image-2.5-sunburst"
 	BaseURL        = "https://api.openai.com/v1/images"
 	defaultTimeout = 5 * time.Minute
 )
@@ -163,7 +163,7 @@ func normalizeSize(req imagegen.Request) (string, error) {
 
 func normalizeQuality(quality string) string {
 	switch quality {
-	case "low", "medium", "high", "auto":
+	case "low", "medium", "high", "xhigh", "max", "auto":
 		return quality
 	default:
 		return "auto"

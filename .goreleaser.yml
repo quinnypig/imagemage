@@ -98,7 +98,7 @@ release:
   header: |
     ## What's New in {{ .Version }}
 
-    OpenAI Images is now the default, with Gemini still available when you need Google's particular flavor of API archaeology.
+    GPT Image 2.5 Sunburst is now the default. Use --model=gpt-image-2.5-flare for the faster alternative, and --quality=xhigh or --quality=max for the new quality levels. Gemini remains available.
   footer: |
     ## Installation
 

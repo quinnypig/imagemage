@@ -8,7 +8,7 @@ So here's Imagemage: a focused CLI tool that does exactly one thing - talks to i
 
 Imagemage lets you generate and edit images using OpenAI Images by default, with Google's Gemini image models still available as a fallback provider. You get:
 
-- **OpenAI Images** (default) - GPT Image generation and editing via `gpt-image-2`
+- **OpenAI Images** (default) - GPT Image generation and editing via `gpt-image-2.5-sunburst`
 - **Gemini 3 Pro Image** (`--provider=gemini`) - High-quality 4K generation
 - **Nano Banana 2** (`--provider=gemini --frugal`) - Pro quality at Flash speed, still supports 4K
 
@@ -128,8 +128,8 @@ imagemage generate "concept art" --provider=gemini
 - `-a, --aspect-ratio` - Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9, 5:4, 4:5)
 - `-r, --resolution` - Resolution hint (512px, 1K, 2K, 4K)
 - `--provider` - Image provider: openai or gemini (default: openai, or `IMAGEMAGE_PROVIDER`)
-- `--model` - Provider model override
-- `--quality` - Quality hint: low, medium, high, auto
+- `--model` - Provider model override (for example, `gpt-image-2.5-flare` for faster generation)
+- `--quality` - Quality hint: low, medium, high, xhigh, max, auto (`xhigh` and `max` require GPT Image 2.5)
 - `--format` - Output format for providers that support it: png, jpeg, webp
 - `-f, --frugal` - Deprecated alias for low-cost generation; with Gemini it selects Nano Banana 2
 - `--slide` - Optimized for presentation slides (4K, 16:9)
@@ -358,3 +358,16 @@ MIT License - see LICENSE file for details. Use it, fork it, deploy it, sell it 
 - [Cobra](https://github.com/spf13/cobra), for making CLI development not painful
 - [gemimg](https://github.com/minimaxir/gemimg) by Max Woolf - inspired several features including storing prompts in metadata (genius!)
 - Everyone who said "just use the official Gemini CLI" - you inspired this out of spite
+
+## Related repositories
+
+This repository owns the CLI, shared image-provider library, and GitHub releases.
+The Homebrew formula is published to `quinnypig/homebrew-imagemage`.
+The live web app and its EKS/ArgoCD deployment live in
+[L9Labs/media-tools](https://github.com/L9Labs/media-tools), which pins a released
+version of this library. `pipeline-of-regret/imagemage-web` is archived.
+
+GPT Image 2.5 uses the same token rates as GPT Image 2, but token consumption
+and per-image costs can differ. Quality defaults to `auto`; use an explicit
+quality for more predictable cost. Resolutions above 2560×1440 remain experimental.
+See the [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation).

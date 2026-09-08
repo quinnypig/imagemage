@@ -31,7 +31,7 @@ var generateCmd = &cobra.Command{
 	Short: "Generate images from text descriptions",
 	Long: `Generate one or more images from a text prompt using OpenAI Images or Gemini.
 
-By default, uses OpenAI Images via gpt-image-2. Use --provider=gemini to use Gemini
+By default, uses OpenAI Images via gpt-image-2.5-sunburst. Use --provider=gemini to use Gemini
 image models. The --frugal flag is a deprecated low-cost alias; with Gemini it
 selects Nano Banana 2 (gemini-3.1-flash-image-preview).
 

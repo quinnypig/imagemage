@@ -24,7 +24,7 @@ var (
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cliProvider, "provider", "", "Image provider: openai or gemini (default: IMAGEMAGE_PROVIDER or openai)")
 	rootCmd.PersistentFlags().StringVar(&cliModel, "model", "", fmt.Sprintf("Provider model override (openai default: %s; gemini default: %s, or %s with --frugal)", openai.ModelName, gemini.ModelName, gemini.ModelNameFrugal))
-	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, auto (OpenAI only; ignored by Gemini)")
+	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, xhigh, max, auto (OpenAI only; ignored by Gemini)")
 	rootCmd.PersistentFlags().StringVar(&cliFormat, "format", "png", "Output format: png, jpeg, webp (OpenAI only; Gemini always outputs png)")
 }
 

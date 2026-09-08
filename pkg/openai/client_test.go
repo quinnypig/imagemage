@@ -14,6 +14,65 @@ import (
 
 const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
+func TestDefaultModelAndQualityOnWire(t *testing.T) {
+	for _, edit := range []bool{false, true} {
+		for _, quality := range []string{"auto", "xhigh", "max"} {
+			name := "generate/" + quality
+			if edit {
+				name = "edit/" + quality
+			}
+			t.Run(name, func(t *testing.T) {
+				client, err := openai.NewClient("", openai.WithAPIKey("test-key"), openai.WithHTTPClient(roundTripClient(func(r *http.Request) (*http.Response, error) {
+					var model, gotQuality string
+					if edit {
+						if err := r.ParseMultipartForm(1 << 20); err != nil {
+							t.Fatal(err)
+						}
+						defer r.MultipartForm.RemoveAll()
+						model, gotQuality = r.FormValue("model"), r.FormValue("quality")
+					} else {
+						var body map[string]string
+						var raw map[string]json.RawMessage
+						if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+							t.Fatal(err)
+						}
+						body = make(map[string]string)
+						for _, key := range []string{"model", "quality"} {
+							var value string
+							if err := json.Unmarshal(raw[key], &value); err != nil {
+								t.Fatal(err)
+							}
+							body[key] = value
+						}
+						model, gotQuality = body["model"], body["quality"]
+					}
+					if model != "gpt-image-2.5-sunburst" || gotQuality != quality {
+						t.Fatalf("model=%q quality=%q; want Sunburst with %q", model, gotQuality, quality)
+					}
+					return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
+				})))
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := imagegen.Request{Prompt: "test", Quality: quality}
+				var result imagegen.Result
+				if edit {
+					req.Images = []imagegen.ImageInput{{MimeType: "image/png", Base64: tinyPNGBase64}}
+					result, err = client.Edit(context.Background(), req)
+				} else {
+					result, err = client.Generate(context.Background(), req)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if result.Model != "gpt-image-2.5-sunburst" {
+					t.Fatalf("unexpected result model: %q", result.Model)
+				}
+			})
+		}
+	}
+}
+
 func TestGenerateSendsImagesRequest(t *testing.T) {
 	var gotPath string
 	var gotAuth string
