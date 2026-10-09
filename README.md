@@ -371,3 +371,14 @@ GPT Image 2.5 uses the same token rates as GPT Image 2, but token consumption
 and per-image costs can differ. Quality defaults to `auto`; use an explicit
 quality for more predictable cost. Resolutions above 2560×1440 remain experimental.
 See the [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation).
+
+## Optional model traces
+
+The CLI sends no telemetry by default. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to your
+collector and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` to enable model spans.
+For this fleet, use a collector configured to fan out to Honeycomb and CloudWatch
+Omni; the CLI does not create AWS credentials or a second destination itself.
+Prompts and returned filenames are bounded to 16,384 characters; binary images
+are omitted. Set `OTEL_GENAI_CAPTURE_CONTENT=false` for metadata only. The current
+provider result type does not expose usage, so these calls explicitly report
+`no_usage_reported`, with no fabricated price. The CLI flushes before exiting.

@@ -47,7 +47,10 @@ Full documentation: https://github.com/quinnypig/imagemage`,
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	shutdown := initializeTelemetry()
+	err := rootCmd.Execute()
+	shutdown()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

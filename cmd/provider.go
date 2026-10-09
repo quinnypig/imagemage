@@ -44,7 +44,10 @@ func newImageClient(frugal bool) (imagegen.Client, imagegen.Provider, string, er
 			model = openai.ModelName
 		}
 		client, err := openai.NewClient(model)
-		return client, provider, model, err
+		if err != nil {
+			return nil, provider, model, err
+		}
+		return &tracedImageClient{client: client, provider: provider, model: model}, provider, model, nil
 	case imagegen.ProviderGemini:
 		if model == "" && frugal {
 			model = gemini.ModelNameFrugal
@@ -53,7 +56,10 @@ func newImageClient(frugal bool) (imagegen.Client, imagegen.Provider, string, er
 			model = gemini.ModelName
 		}
 		client, err := gemini.NewClientWithModel(model)
-		return client, provider, model, err
+		if err != nil {
+			return nil, provider, model, err
+		}
+		return &tracedImageClient{client: client, provider: provider, model: model}, provider, model, nil
 	default:
 		return nil, "", "", fmt.Errorf("unsupported provider %q (supported: openai, gemini)", provider)
 	}
