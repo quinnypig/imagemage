@@ -24,6 +24,7 @@ var (
 	generateConfig      string
 	generateForce       bool
 	generateStorePrompt bool
+	generatePromptFile  string
 )
 
 var generateCmd = &cobra.Command{
@@ -55,8 +56,9 @@ Examples:
   imagemage generate "cyberpunk city" --style="neon, futuristic"
   imagemage generate "wide cinematic shot" --aspect-ratio="21:9"
   imagemage generate "phone wallpaper" --aspect-ratio="9:16"
-  imagemage generate "concept art" --frugal`,
-	Args: cobra.MinimumNArgs(1),
+  imagemage generate "concept art" --frugal
+  imagemage generate --prompt-file ./prompt.txt`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runGenerate,
 }
 
@@ -74,14 +76,17 @@ func init() {
 	generateCmd.Flags().StringVar(&generateConfig, "config", "", "Path to JSON config file with theme defaults (see example above; auto-discovers ./image-gen.config.json if no path given)")
 	generateCmd.Flags().BoolVar(&generateForce, "force", false, "Overwrite existing files without confirmation")
 	generateCmd.Flags().BoolVar(&generateStorePrompt, "store-prompt", false, "Store prompt in PNG metadata for reproducibility")
+	addPromptFileFlag(generateCmd, &generatePromptFile)
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
-	prompt := args[0]
+	prompt, err := resolvePrompt(optionalArg(args, 0), generatePromptFile)
+	if err != nil {
+		return err
+	}
 
 	// Load config if --slide or --config is specified
 	var config *gemini.ImageGenConfig
-	var err error
 	if generateSlide || generateConfig != "" {
 		config, err = gemini.FindConfig(generateConfig)
 		if err != nil {
