@@ -46,7 +46,7 @@ func TestDefaultModelAndQualityOnWire(t *testing.T) {
 						}
 						model, gotQuality = body["model"], body["quality"]
 					}
-					if model != "gpt-image-2.5-sunburst" || gotQuality != quality {
+					if model != "gpt-image-2.6-sunburst" || gotQuality != quality {
 						t.Fatalf("model=%q quality=%q; want Sunburst with %q", model, gotQuality, quality)
 					}
 					return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
@@ -65,7 +65,7 @@ func TestDefaultModelAndQualityOnWire(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if result.Model != "gpt-image-2.5-sunburst" {
+				if result.Model != "gpt-image-2.6-sunburst" {
 					t.Fatalf("unexpected result model: %q", result.Model)
 				}
 			})
@@ -264,5 +264,105 @@ func jsonResponse(statusCode int, body string) *http.Response {
 		StatusCode: statusCode,
 		Header:     make(http.Header),
 		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func TestComplexityAndNewFormatsOnGenerate(t *testing.T) {
+	for _, tc := range []struct{ complexity, wantComplexity, format string }{
+		{"low", "low", "svg"},
+		{"medium", "medium", "gif"},
+		{"high", "high", "png"},
+		{"", "", "png"},
+		{"bogus", "", "png"},
+	} {
+		t.Run(tc.complexity+"/"+tc.format, func(t *testing.T) {
+			var body map[string]any
+			client, err := openai.NewClient("", openai.WithAPIKey("test-key"), openai.WithHTTPClient(roundTripClient(func(r *http.Request) (*http.Response, error) {
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
+			})))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Generate(context.Background(), imagegen.Request{Prompt: "x", Complexity: tc.complexity, OutputFormat: tc.format}); err != nil {
+				t.Fatal(err)
+			}
+			assertField(t, body, "output_format", tc.format)
+			if tc.wantComplexity == "" {
+				if _, present := body["complexity"]; present {
+					t.Fatalf("complexity should be omitted, got %v", body["complexity"])
+				}
+				return
+			}
+			assertField(t, body, "complexity", tc.wantComplexity)
+		})
+	}
+}
+
+func TestEditSendsMarkupAndComplexity(t *testing.T) {
+	var gotMarkupType, gotMarkupName, gotComplexity string
+	var order []string
+	client, err := openai.NewClient("", openai.WithAPIKey("test-key"), openai.WithHTTPClient(roundTripClient(func(r *http.Request) (*http.Response, error) {
+		reader, err := r.MultipartReader()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch part.FormName() {
+			case "markup":
+				gotMarkupType, gotMarkupName = part.Header.Get("Content-Type"), part.FileName()
+				order = append(order, "markup")
+			case "image[]":
+				order = append(order, "image")
+			case "complexity":
+				data, _ := io.ReadAll(part)
+				gotComplexity = string(data)
+			}
+		}
+		return jsonResponse(http.StatusOK, `{"data":[{"b64_json":"`+tinyPNGBase64+`"}]}`), nil
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Edit(context.Background(), imagegen.Request{
+		Prompt:     "replace the circled lamp",
+		Complexity: "medium",
+		Images:     []imagegen.ImageInput{{MimeType: "image/png", Base64: tinyPNGBase64}},
+		Markup:     &imagegen.ImageInput{MimeType: "image/png", Base64: tinyPNGBase64},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotMarkupType != "image/png" || gotMarkupName != "markup.png" {
+		t.Fatalf("markup part: type=%q name=%q", gotMarkupType, gotMarkupName)
+	}
+	if strings.Join(order, ",") != "image,markup" {
+		t.Fatalf("original image must come first; got %v", order)
+	}
+	if gotComplexity != "medium" {
+		t.Fatalf("complexity=%q", gotComplexity)
+	}
+}
+
+func TestMarkupWithoutImageFails(t *testing.T) {
+	client, err := openai.NewClient("", openai.WithAPIKey("test-key"), openai.WithHTTPClient(roundTripClient(func(r *http.Request) (*http.Response, error) {
+		t.Fatal("no request expected")
+		return nil, nil
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Edit(context.Background(), imagegen.Request{Prompt: "x", Markup: &imagegen.ImageInput{MimeType: "image/png", Base64: tinyPNGBase64}})
+	if err == nil {
+		t.Fatal("expected error for markup without a base image")
 	}
 }

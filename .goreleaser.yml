@@ -98,7 +98,7 @@ release:
   header: |
     ## What's New in {{ .Version }}
 
-    GPT Image 2.5 Sunburst is now the default. Use --model=gpt-image-2.5-flare for the faster alternative, and --quality=xhigh or --quality=max for the new quality levels. Gemini remains available.
+    GPT Image 2.6 Sunburst is now the default. New: --complexity=low|medium|high, --format=svg and --format=gif, and edit --markup for markup-guided edits from a transparent PNG layer. Use --model=gpt-image-2.6-flare for the faster alternative. Gemini remains available.
   footer: |
     ## Installation
 

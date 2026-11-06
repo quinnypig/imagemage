@@ -15,17 +15,19 @@ import (
 )
 
 var (
-	cliProvider string
-	cliModel    string
-	cliQuality  string
-	cliFormat   string
+	cliProvider   string
+	cliModel      string
+	cliQuality    string
+	cliFormat     string
+	cliComplexity string
 )
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cliProvider, "provider", "", "Image provider: openai or gemini (default: IMAGEMAGE_PROVIDER or openai)")
 	rootCmd.PersistentFlags().StringVar(&cliModel, "model", "", fmt.Sprintf("Provider model override (openai default: %s; gemini default: %s, or %s with --frugal)", openai.ModelName, gemini.ModelName, gemini.ModelNameFrugal))
-	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, xhigh, max, auto (OpenAI only; ignored by Gemini)")
-	rootCmd.PersistentFlags().StringVar(&cliFormat, "format", "png", "Output format: png, jpeg, webp (OpenAI only; Gemini always outputs png)")
+	rootCmd.PersistentFlags().StringVar(&cliQuality, "quality", "auto", "Generation quality: low, medium, high, xhigh, max, auto (OpenAI only; xhigh and max need GPT Image 2.5 or later; ignored by Gemini)")
+	rootCmd.PersistentFlags().StringVar(&cliFormat, "format", "png", "Output format: png, jpeg, webp, svg, gif (OpenAI only; svg and gif need GPT Image 2.6; Gemini always outputs png)")
+	rootCmd.PersistentFlags().StringVar(&cliComplexity, "complexity", "", "How much GPT Image 2.6 plans before rendering: low, medium, high (default: API default, high)")
 }
 
 func newImageClient(frugal bool) (imagegen.Client, imagegen.Provider, string, error) {
@@ -77,6 +79,7 @@ func generationRequest(prompt, resolution, aspectRatio string, images []imagegen
 		Resolution:   resolution,
 		Quality:      quality,
 		OutputFormat: cliFormat,
+		Complexity:   cliComplexity,
 	}
 }
 
@@ -116,6 +119,10 @@ func imageFileExtension() string {
 		return ".jpg"
 	case "webp":
 		return ".webp"
+	case "svg":
+		return ".svg"
+	case "gif":
+		return ".gif"
 	default:
 		return ".png"
 	}

@@ -24,6 +24,12 @@ type Request struct {
 	Resolution   string
 	Quality      string
 	OutputFormat string
+	// Complexity controls how much GPT Image 2.6 plans before rendering
+	// (low, medium, high). Empty leaves it to the API, which defaults to high.
+	Complexity string
+	// Markup is an optional transparent PNG annotation layer for GPT Image 2.6
+	// markup-guided edits. It applies to the first input image.
+	Markup *ImageInput
 }
 
 type Result struct {

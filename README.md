@@ -8,7 +8,7 @@ So here's Imagemage: a focused CLI tool that does exactly one thing - talks to i
 
 Imagemage lets you generate and edit images using OpenAI Images by default, with Google's Gemini image models still available as a fallback provider. You get:
 
-- **OpenAI Images** (default) - GPT Image generation and editing via `gpt-image-2.5-sunburst`
+- **OpenAI Images** (default) - GPT Image generation and editing via `gpt-image-2.6-sunburst`
 - **Gemini 3 Pro Image** (`--provider=gemini`) - High-quality 4K generation
 - **Nano Banana 2** (`--provider=gemini --frugal`) - Pro quality at Flash speed, still supports 4K
 
@@ -128,9 +128,10 @@ imagemage generate "concept art" --provider=gemini
 - `-a, --aspect-ratio` - Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9, 5:4, 4:5)
 - `-r, --resolution` - Resolution hint (512px, 1K, 2K, 4K)
 - `--provider` - Image provider: openai or gemini (default: openai, or `IMAGEMAGE_PROVIDER`)
-- `--model` - Provider model override (for example, `gpt-image-2.5-flare` for faster generation)
-- `--quality` - Quality hint: low, medium, high, xhigh, max, auto (`xhigh` and `max` require GPT Image 2.5)
-- `--format` - Output format for providers that support it: png, jpeg, webp
+- `--model` - Provider model override (for example, `gpt-image-2.6-flare` for faster generation)
+- `--quality` - Quality hint: low, medium, high, xhigh, max, auto (`xhigh` and `max` require GPT Image 2.5 or later)
+- `--format` - Output format for providers that support it: png, jpeg, webp, svg, gif (`svg` and `gif` require GPT Image 2.6)
+- `--complexity` - How much GPT Image 2.6 plans before rendering: low, medium, high (the API defaults to high; complex prompts can take up to two minutes)
 - `-f, --frugal` - Deprecated alias for low-cost generation; with Gemini it selects Nano Banana 2
 - `--slide` - Optimized for presentation slides (4K, 16:9)
 - `--store-prompt` - Save the prompt in the image metadata (for reproducibility)
@@ -160,6 +161,10 @@ imagemage edit portrait.png "change background to beach" --output=edited.png
 # Compose multiple images (up to 14, but best results with 3 or fewer)
 imagemage edit background.png "add this person on the left" -i person.png
 imagemage edit scene.png "put these people here" -i person1.png -i person2.png
+
+# Markup-guided edit (GPT Image 2.6): scribble on a transparent PNG layer the
+# same size as the photo, then say what the scribbles mean
+imagemage edit room.png "replace the circled lamp with a floor plant" --markup circles.png
 ```
 
 **Flags:**
@@ -168,6 +173,7 @@ imagemage edit scene.png "put these people here" -i person1.png -i person2.png
 - `-f, --frugal` - Use the cheaper model (when perfection isn't the goal)
 - `--force` - Overwrite existing files without asking (live dangerously)
 - `--store-prompt` - Save your edit instruction in the metadata
+- `--markup` - Transparent PNG annotation layer for markup-guided edits (OpenAI only). Keep it separate; don't flatten it onto the original
 
 ### Restore Command
 
@@ -367,9 +373,13 @@ The live web app and its EKS/ArgoCD deployment live in
 [L9Labs/media-tools](https://github.com/L9Labs/media-tools), which pins a released
 version of this library. `pipeline-of-regret/imagemage-web` is archived.
 
-GPT Image 2.5 uses the same token rates as GPT Image 2, but token consumption
-and per-image costs can differ. Quality defaults to `auto`; use an explicit
-quality for more predictable cost. Resolutions above 2560×1440 remain experimental.
+GPT Image 2.6 (`gpt-image-2.6-sunburst`, the default, and `gpt-image-2.6-flare`)
+adds complexity control, markup-guided edits, and SVG and animated GIF output.
+Quality defaults to `auto`; use an explicit quality for more predictable cost.
+Sizes must keep the aspect ratio between 1:3 and 3:1, with no edge over 3840 px.
+SVG output is billed at both the image model's rate and the authoring model's
+token rate. Metadata stripping covers PNG, JPEG and WebP; SVG and GIF are
+returned as the API sent them.
 See the [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation).
 
 ## Optional model traces

@@ -21,6 +21,7 @@ var (
 	editFrugal      bool
 	editForce       bool
 	editStorePrompt bool
+	editMarkup      string
 )
 
 var editCmd = &cobra.Command{
@@ -41,7 +42,10 @@ Examples:
   imagemage edit scene.png "put these people here" -i person1.png -i person2.png
 
   # Complex composition
-  imagemage edit office.png "add this person and this laptop" -i person.png -i laptop.png`,
+  imagemage edit office.png "add this person and this laptop" -i person.png -i laptop.png
+
+  # Markup-guided edit: draw on a transparent PNG layer, then describe the change
+  imagemage edit room.png "replace the circled lamp with a floor plant" --markup circles.png`,
 	Args: cobra.ExactArgs(2),
 	RunE: runEdit,
 }
@@ -56,6 +60,7 @@ func init() {
 	editCmd.Flags().BoolVarP(&editFrugal, "frugal", "f", false, "Deprecated alias for low-cost generation; with Gemini selects Nano Banana 2")
 	editCmd.Flags().BoolVar(&editForce, "force", false, "Overwrite output file if it exists")
 	editCmd.Flags().BoolVar(&editStorePrompt, "store-prompt", false, "Store instruction in PNG metadata")
+	editCmd.Flags().StringVar(&editMarkup, "markup", "", "Transparent PNG annotation layer drawn over the base image, for markup-guided edits (OpenAI GPT Image 2.6)")
 }
 
 func runEdit(cmd *cobra.Command, args []string) error {
@@ -166,6 +171,19 @@ func runEdit(cmd *cobra.Command, args []string) error {
 
 	// Generate with all images
 	req := generationRequest(instruction, editResolution, editAspectRatio, allImages, editFrugal)
+	if editMarkup != "" {
+		if provider != "openai" {
+			return fmt.Errorf("--markup is only supported by the OpenAI provider")
+		}
+		markup, err := loadImageInput(editMarkup)
+		if err != nil {
+			return fmt.Errorf("failed to load markup layer: %w", err)
+		}
+		if markup.MimeType != "image/png" {
+			return fmt.Errorf("markup layer must be a transparent PNG, got %s", markup.MimeType)
+		}
+		req.Markup = &markup
+	}
 	result, err := client.Edit(context.Background(), req)
 
 	if err != nil {

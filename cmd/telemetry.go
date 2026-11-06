@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"imagemage/pkg/imagegen"
+	"os"
+	"time"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -11,9 +15,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"imagemage/pkg/imagegen"
-	"os"
-	"time"
 )
 
 // No telemetry leaves the CLI unless the operator supplies an OTLP destination.

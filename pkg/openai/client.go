@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ModelName      = "gpt-image-2.5-sunburst"
+	ModelName      = "gpt-image-2.6-sunburst"
 	BaseURL        = "https://api.openai.com/v1/images"
 	defaultTimeout = 5 * time.Minute
 )
@@ -82,6 +82,7 @@ func (c *Client) Generate(ctx context.Context, req imagegen.Request) (imagegen.R
 		Size:         size,
 		Quality:      normalizeQuality(req.Quality),
 		OutputFormat: normalizeOutputFormat(req.OutputFormat),
+		Complexity:   normalizeComplexity(req.Complexity),
 		N:            1,
 	}
 	return c.postJSON(ctx, "/generations", body)
@@ -89,6 +90,9 @@ func (c *Client) Generate(ctx context.Context, req imagegen.Request) (imagegen.R
 
 func (c *Client) Edit(ctx context.Context, req imagegen.Request) (imagegen.Result, error) {
 	if len(req.Images) == 0 {
+		if req.Markup != nil {
+			return imagegen.Result{}, fmt.Errorf("markup edits require an input image")
+		}
 		return c.Generate(ctx, req)
 	}
 
@@ -105,6 +109,7 @@ func (c *Client) Edit(ctx context.Context, req imagegen.Request) (imagegen.Resul
 		"size":          size,
 		"quality":       normalizeQuality(req.Quality),
 		"output_format": normalizeOutputFormat(req.OutputFormat),
+		"complexity":    normalizeComplexity(req.Complexity),
 		"n":             "1",
 	}
 	for k, v := range fields {
@@ -143,6 +148,25 @@ func (c *Client) Edit(ctx context.Context, req imagegen.Request) (imagegen.Resul
 		}
 	}
 
+	if req.Markup != nil {
+		// The markup layer is a separate transparent PNG, never flattened onto
+		// the original; the API rejects it alongside mask or prompt_rewriter.
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", `form-data; name="markup"; filename="markup.png"`)
+		header.Set("Content-Type", "image/png")
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return imagegen.Result{}, fmt.Errorf("failed to create markup form part: %w", err)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(req.Markup.Base64)
+		if err != nil {
+			return imagegen.Result{}, fmt.Errorf("failed to decode markup image: %w", err)
+		}
+		if _, err := part.Write(decoded); err != nil {
+			return imagegen.Result{}, fmt.Errorf("failed to write markup form part: %w", err)
+		}
+	}
+
 	if err := writer.Close(); err != nil {
 		return imagegen.Result{}, fmt.Errorf("failed to close multipart body: %w", err)
 	}
@@ -172,10 +196,21 @@ func normalizeQuality(quality string) string {
 
 func normalizeOutputFormat(format string) string {
 	switch format {
-	case "png", "jpeg", "webp":
+	case "png", "jpeg", "webp", "svg", "gif":
 		return format
 	default:
 		return "png"
+	}
+}
+
+// normalizeComplexity returns "" for anything unrecognized so the field is
+// omitted and the API applies its own default (high).
+func normalizeComplexity(complexity string) string {
+	switch complexity {
+	case "low", "medium", "high":
+		return complexity
+	default:
+		return ""
 	}
 }
 
@@ -300,6 +335,7 @@ type generationRequest struct {
 	Size         string `json:"size,omitempty"`
 	Quality      string `json:"quality,omitempty"`
 	OutputFormat string `json:"output_format,omitempty"`
+	Complexity   string `json:"complexity,omitempty"`
 	N            int    `json:"n,omitempty"`
 }
 
